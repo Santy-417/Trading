@@ -12,7 +12,6 @@ config = context.config
 settings = get_settings()
 
 # Override sqlalchemy.url with the actual database URL
-# Alembic uses async engine, keep asyncpg driver
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
 if config.config_file_name is not None:
@@ -22,7 +21,13 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
+    """Generate SQL script without connecting to the database.
+
+    Usage: alembic upgrade head --sql > migration.sql
+    """
+    # Use a plain postgresql:// URL for offline SQL generation
     url = config.get_main_option("sqlalchemy.url")
+    url = url.replace("postgresql+asyncpg://", "postgresql://")
     context.configure(
         url=url,
         target_metadata=target_metadata,
