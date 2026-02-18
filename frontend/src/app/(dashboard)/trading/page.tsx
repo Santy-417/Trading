@@ -50,7 +50,7 @@ export default function TradingPage() {
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard
             title="Net Profit"
-            value={metrics ? `$${metrics.net_profit.toFixed(2)}` : "$0.00"}
+            value={metrics ? `$${(metrics.net_profit ?? 0).toFixed(2)}` : "$0.00"}
             icon={TrendingUpIcon}
             color="#22c55e"
             trend={metrics && metrics.net_profit >= 0 ? "up" : "down"}
@@ -59,7 +59,7 @@ export default function TradingPage() {
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard
             title="Win Rate"
-            value={metrics ? `${metrics.win_rate.toFixed(1)}%` : "0%"}
+            value={metrics ? `${(metrics.win_rate ?? 0).toFixed(1)}%` : "0%"}
             icon={ShowChartIcon}
             color="#3b82f6"
           />
@@ -67,7 +67,7 @@ export default function TradingPage() {
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard
             title="Open Positions"
-            value={positions.length}
+            value={metrics?.open_positions ?? positions.length}
             icon={AccountBalanceIcon}
             color="#8b5cf6"
           />
@@ -75,7 +75,7 @@ export default function TradingPage() {
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard
             title="Max Drawdown"
-            value={metrics ? `${metrics.max_drawdown.toFixed(1)}%` : "0%"}
+            value={metrics ? `$${(metrics.max_drawdown ?? 0).toFixed(2)}` : "$0.00"}
             icon={WarningAmberIcon}
             color="#f59e0b"
           />

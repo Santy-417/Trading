@@ -1,3 +1,5 @@
+from datetime import date, datetime, timezone
+
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +32,10 @@ class MetricsService:
                 "average_loss": 0.0,
                 "largest_win": 0.0,
                 "largest_loss": 0.0,
+                "max_drawdown": 0.0,
+                "sharpe_ratio": 0.0,
+                "today_pnl": 0.0,
+                "open_positions": 0,
             }
 
         # Winning trades
@@ -78,6 +84,18 @@ class MetricsService:
         avg_profit = (total_profit / winning) if winning > 0 else 0
         avg_loss = (total_loss / losing) if losing > 0 else 0
 
+        # Max drawdown from equity curve
+        max_drawdown = await self._calculate_max_drawdown()
+
+        # Today's P&L
+        today_pnl = await self._calculate_today_pnl()
+
+        # Open positions count
+        open_q = await self.session.execute(
+            select(func.count()).select_from(Trade).where(Trade.status == "open")
+        )
+        open_positions = open_q.scalar() or 0
+
         return {
             "total_trades": total_trades,
             "winning_trades": winning,
@@ -91,7 +109,45 @@ class MetricsService:
             "average_loss": round(avg_loss, 2),
             "largest_win": round(largest_win, 2),
             "largest_loss": round(largest_loss, 2),
+            "max_drawdown": round(max_drawdown, 2),
+            "sharpe_ratio": 0.0,
+            "today_pnl": round(today_pnl, 2),
+            "open_positions": open_positions,
         }
+
+    async def _calculate_max_drawdown(self) -> float:
+        """Calculate max drawdown percentage from closed trades."""
+        result = await self.session.execute(
+            select(Trade.profit)
+            .where(Trade.status == "closed")
+            .order_by(Trade.closed_at.asc())
+        )
+        profits = [float(r[0] or 0) for r in result.all()]
+        if not profits:
+            return 0.0
+
+        cumulative = 0.0
+        peak = 0.0
+        max_dd = 0.0
+        for p in profits:
+            cumulative += p
+            if cumulative > peak:
+                peak = cumulative
+            dd = peak - cumulative
+            if dd > max_dd:
+                max_dd = dd
+        return max_dd
+
+    async def _calculate_today_pnl(self) -> float:
+        """Calculate today's profit/loss."""
+        today_start = datetime.combine(date.today(), datetime.min.time(), tzinfo=timezone.utc)
+        result = await self.session.execute(
+            select(func.coalesce(func.sum(Trade.profit), 0)).where(
+                Trade.status == "closed",
+                Trade.closed_at >= today_start,
+            )
+        )
+        return float(result.scalar() or 0)
 
     async def get_equity_curve(self) -> list[dict]:
         """Get equity curve data points from closed trades."""
