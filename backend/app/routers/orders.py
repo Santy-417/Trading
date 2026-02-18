@@ -1,0 +1,78 @@
+from fastapi import APIRouter, Depends, Query, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.rate_limit import trading_limiter
+from app.core.security import get_current_user
+from app.integrations.supabase.client import get_db
+from app.schemas.order import (
+    ClosePositionRequest,
+    LimitOrderRequest,
+    MarketOrderRequest,
+    OrderResponse,
+)
+from app.services.order_service import OrderService
+
+router = APIRouter(prefix="/orders", tags=["Orders"])
+
+
+def _get_ip(request: Request) -> str | None:
+    return request.client.host if request.client else None
+
+
+@router.post("/market", response_model=OrderResponse)
+@trading_limiter
+async def market_order(
+    request: Request,
+    body: MarketOrderRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    service = OrderService(db)
+    return await service.market_order(body, ip=_get_ip(request))
+
+
+@router.post("/limit", response_model=OrderResponse)
+@trading_limiter
+async def limit_order(
+    request: Request,
+    body: LimitOrderRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    service = OrderService(db)
+    return await service.limit_order(body, ip=_get_ip(request))
+
+
+@router.post("/close", response_model=OrderResponse)
+@trading_limiter
+async def close_position(
+    request: Request,
+    body: ClosePositionRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    service = OrderService(db)
+    return await service.close_position(body.ticket, ip=_get_ip(request))
+
+
+@router.get("/open")
+async def get_open_positions(
+    _user: dict = Depends(get_current_user),
+):
+    service = OrderService(None)
+    return await service.get_open_positions()
+
+
+@router.get("/history")
+async def get_trade_history(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    symbol: str | None = Query(default=None),
+    strategy: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    service = OrderService(db)
+    return await service.get_trade_history(
+        page=page, page_size=page_size, symbol=symbol, strategy=strategy
+    )
