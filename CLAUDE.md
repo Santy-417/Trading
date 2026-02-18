@@ -8,18 +8,19 @@ Professional Forex AI Trading Platform. Automated trading on MetaTrader 5 with r
 
 ## Architecture
 
-Monolithic modular system with Clean Architecture + SOLID. 3 phases:
+Monolithic modular system with Clean Architecture + SOLID. 3 phases (all complete):
 - **Phase 1 (complete):** Backend (FastAPI) + MT5 integration + Risk engine
 - **Phase 2 (complete):** Backtesting engine + ML module (XGBoost)
-- **Phase 3 (pending):** Frontend (Next.js 14) + AI Analysis (OpenAI)
+- **Phase 3 (complete):** Frontend (Next.js 14 + Material UI v7) + AI Analysis (OpenAI)
 
 ## Tech Stack
 
 - **Backend:** Python 3.11+, FastAPI, SQLAlchemy 2.0 (async), Supabase (PostgreSQL), Redis, Celery
+- **Frontend:** Next.js 14, TypeScript, Material UI v7, Zustand, Recharts, TradingView widget
 - **Trading:** MetaTrader5 Python package, XAUUSD + EURUSD
 - **ML:** XGBoost + scikit-learn, walk-forward validation, feature engineering (RSI, MACD, BB, ATR, EMA, momentum)
+- **AI Analysis:** OpenAI GPT-4o-mini (abstraction for future Claude/Local support)
 - **Auth:** Supabase JWT verification, RBAC (admin only)
-- **Frontend (Phase 3):** Next.js 14, TypeScript, Material UI, TradingView widget
 
 ## Common Commands
 
@@ -27,6 +28,11 @@ Monolithic modular system with Clean Architecture + SOLID. 3 phases:
 # Backend (from /backend directory)
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
+
+# Frontend (from /frontend directory)
+npm install
+npm run dev          # http://localhost:3000
+npm run build
 
 # Tests
 pytest tests/ -v
@@ -62,13 +68,15 @@ backend/app/
 │   ├── orders.py              # /api/v1/orders/*
 │   ├── metrics.py             # /api/v1/metrics/*
 │   ├── backtest.py            # /api/v1/backtest/*
-│   └── ml.py                  # /api/v1/ml/*
+│   ├── ml.py                  # /api/v1/ml/*
+│   └── ai.py                  # /api/v1/ai/*
 ├── services/
 │   ├── bot_service.py         # Bot lifecycle management
 │   ├── order_service.py       # Order execution logic
 │   ├── metrics_service.py     # Trading metrics aggregation
 │   ├── backtest_service.py    # Backtesting orchestration
-│   └── ml_service.py          # ML training/prediction orchestration
+│   ├── ml_service.py          # ML training/prediction orchestration
+│   └── ai_service.py          # AI analysis orchestration
 ├── repositories/
 │   ├── trade_repository.py    # Trade CRUD operations
 │   └── audit_repository.py    # Audit log persistence
@@ -86,7 +94,8 @@ backend/app/
 │   ├── bot.py                 # Bot control schemas
 │   ├── order.py               # Order schemas
 │   ├── backtest.py            # Backtest config/result schemas
-│   └── ml.py                  # ML training/prediction schemas
+│   ├── ml.py                  # ML training/prediction schemas
+│   └── ai.py                  # AI analysis request/response schemas
 ├── strategies/
 │   ├── base.py                # ABC: generate_signal(), TradeSignal, SignalDirection
 │   ├── fibonacci.py           # Fibonacci retracement/extension strategy
@@ -113,6 +122,11 @@ backend/app/
 │   ├── model_registry.py      # Save/load models + metadata (joblib)
 │   ├── prediction.py          # Real-time inference
 │   └── optimizer.py           # Grid search + walk-forward validation
+├── ai_analysis/
+│   ├── llm_client.py          # LLM abstraction (OpenAI now, Claude/Local later)
+│   ├── trade_analyzer.py      # Pattern recognition in trades
+│   ├── risk_review.py         # Risk anomaly detection
+│   └── performance_summary.py # Weekly/monthly natural language reports
 ├── tasks/
 │   ├── celery_app.py          # Celery configuration
 │   ├── backtest_tasks.py      # Background backtest jobs
@@ -124,6 +138,37 @@ backend/app/
 │       └── client.py          # SQLAlchemy async engine (lazy init via @lru_cache)
 └── utils/
     └── helpers.py
+```
+
+## Frontend Structure
+
+```
+frontend/src/
+├── app/
+│   ├── layout.tsx             # Root layout + MUI ThemeProvider
+│   ├── page.tsx               # Root redirect (auth check → /trading or /login)
+│   ├── providers.tsx          # MUI dark theme + CssBaseline
+│   ├── login/page.tsx         # Supabase Auth UI login
+│   └── (dashboard)/           # Protected route group (auth guard)
+│       ├── layout.tsx         # AppShell (Sidebar + Header + main content)
+│       ├── trading/page.tsx   # Live trading: TradingView chart, bot control, positions
+│       ├── backtest/page.tsx  # Backtest config, results table, equity curve
+│       ├── ml/page.tsx        # Train models, view predictions, model list
+│       ├── analysis/page.tsx  # AI analysis: trade patterns, risk review, reports
+│       ├── risk/page.tsx      # Risk gauges: drawdown, daily loss, overtrading
+│       ├── audit/page.tsx     # Trade history with filters + pagination
+│       └── settings/page.tsx  # Platform info
+├── components/
+│   ├── layout/                # Sidebar, Header, AppShell
+│   ├── charts/                # TradingViewWidget, EquityChart (Recharts)
+│   ├── trading/               # BotControl, PositionsTable
+│   └── common/                # StatCard, LoadingSpinner
+├── lib/
+│   ├── api.ts                 # Axios instance + JWT interceptor
+│   ├── supabase.ts            # Supabase client
+│   └── theme.ts               # MUI dark theme configuration
+├── store/index.ts             # Zustand store (bot status, positions, metrics)
+└── types/index.ts             # TypeScript interfaces for all API types
 ```
 
 ## Tests (51 tests)
@@ -144,13 +189,28 @@ backend/tests/
 | GET | `/api/v1/health` | Health check |
 | POST | `/api/v1/bot/start` | Start trading bot |
 | POST | `/api/v1/bot/stop` | Stop trading bot |
+| POST | `/api/v1/bot/kill` | Kill switch (emergency stop) |
 | GET | `/api/v1/bot/status` | Bot status |
 | POST | `/api/v1/orders/market` | Place market order |
+| POST | `/api/v1/orders/limit` | Place limit order |
+| POST | `/api/v1/orders/close` | Close position |
 | GET | `/api/v1/orders/open` | List open positions |
-| GET | `/api/v1/metrics/summary` | Trading metrics summary |
+| GET | `/api/v1/orders/history` | Trade history (paginated, filterable) |
+| GET | `/api/v1/metrics/performance` | Performance metrics |
+| GET | `/api/v1/metrics/equity-curve` | Equity curve data |
 | POST | `/api/v1/backtest/run` | Run backtest |
+| POST | `/api/v1/backtest/optimize` | Optimize parameters |
+| GET | `/api/v1/backtest/results` | Historical backtest results |
 | POST | `/api/v1/ml/train` | Train ML model |
+| POST | `/api/v1/ml/validate` | Walk-forward validation |
 | POST | `/api/v1/ml/predict` | Get ML prediction |
+| GET | `/api/v1/ml/models` | List saved models |
+| POST | `/api/v1/ai/analyze-trades` | AI trade pattern analysis |
+| POST | `/api/v1/ai/explain-drawdown` | AI drawdown explanation |
+| POST | `/api/v1/ai/suggest-parameters` | AI parameter suggestions |
+| POST | `/api/v1/ai/risk-review` | AI risk anomaly review |
+| POST | `/api/v1/ai/performance-summary` | AI performance report |
+| POST | `/api/v1/ai/compare-strategies` | AI strategy comparison |
 
 ## Critical Rules
 
@@ -164,3 +224,4 @@ backend/tests/
 - Risk engine must be checked before every trade execution
 - Standard Python logging (not structlog/JSON)
 - Swagger docs available at `/docs`
+- Frontend uses MUI v7 Grid with `size={{ xs, md }}` syntax (not `item` prop)
