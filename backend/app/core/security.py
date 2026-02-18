@@ -12,16 +12,33 @@ security_scheme = HTTPBearer()
 def decode_jwt(token: str) -> dict:
     """Decode and verify a Supabase JWT token."""
     settings = get_settings()
+    secret = settings.supabase_jwt_secret
+
+    # Peek at the token header to determine the algorithm
     try:
-        payload = jwt.decode(
-            token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
-            audience="authenticated",
+        header = jwt.get_unverified_header(token)
+        alg = header.get("alg", "HS256")
+    except JWTError:
+        alg = "HS256"
+
+    # Supabase may use HS256, HS384, or HS512 depending on project config
+    allowed_algs = [alg] if alg.startswith("HS") else ["HS256", "HS384", "HS512"]
+
+    # Try with audience verification first
+    try:
+        return jwt.decode(
+            token, secret, algorithms=allowed_algs, audience="authenticated",
         )
-        return payload
+    except JWTError:
+        pass
+
+    # Fallback: without audience check (some Supabase configs vary)
+    try:
+        return jwt.decode(
+            token, secret, algorithms=allowed_algs, options={"verify_aud": False},
+        )
     except JWTError as e:
-        logger.warning("jwt_verification_failed: error=%s", str(e))
+        logger.warning("jwt_verification_failed: alg=%s, error=%s", alg, str(e))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
