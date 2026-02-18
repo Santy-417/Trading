@@ -9,7 +9,7 @@ from app.core.config import get_settings
 from app.core.logging_config import get_logger, setup_logging
 from app.core.middleware import setup_middleware
 from app.core.rate_limit import limiter
-from app.routers import backtest, bot, health, metrics, ml, orders
+from app.routers import ai, backtest, bot, health, metrics, ml, orders
 
 settings = get_settings()
 setup_logging("DEBUG" if settings.app_debug else "INFO")
@@ -45,6 +45,7 @@ app.include_router(orders.router, prefix="/api/v1")
 app.include_router(metrics.router, prefix="/api/v1")
 app.include_router(backtest.router, prefix="/api/v1")
 app.include_router(ml.router, prefix="/api/v1")
+app.include_router(ai.router, prefix="/api/v1")
 
 
 @app.exception_handler(Exception)
