@@ -57,10 +57,10 @@ export default function BacktestPage() {
     }
   };
 
-  const equityData = result?.equity_curve.map((eq, i) => ({
+  const equityData = (result?.equity_curve ?? []).map((eq, i) => ({
     date: `T${i}`,
     equity: eq,
-  })) ?? [];
+  }));
 
   return (
     <Box>
@@ -159,7 +159,7 @@ export default function BacktestPage() {
                           <TableRow><TableCell>Net Profit</TableCell><TableCell align="right" sx={{ color: result.net_profit >= 0 ? "success.main" : "error.main" }}><strong>${result.net_profit.toFixed(2)}</strong></TableCell></TableRow>
                           <TableRow><TableCell>Profit Factor</TableCell><TableCell align="right"><strong>{result.profit_factor.toFixed(2)}</strong></TableCell></TableRow>
                           <TableRow><TableCell>Sharpe Ratio</TableCell><TableCell align="right"><strong>{result.sharpe_ratio.toFixed(2)}</strong></TableCell></TableRow>
-                          <TableRow><TableCell>Max Drawdown</TableCell><TableCell align="right"><strong>{result.max_drawdown.toFixed(2)}%</strong></TableCell></TableRow>
+                          <TableRow><TableCell>Max Drawdown</TableCell><TableCell align="right"><strong>{(result.max_drawdown_percent ?? 0).toFixed(2)}%</strong></TableCell></TableRow>
                         </TableBody>
                       </Table>
                     </Grid>
@@ -167,8 +167,8 @@ export default function BacktestPage() {
                       <Table size="small">
                         <TableBody>
                           <TableRow><TableCell>Return</TableCell><TableCell align="right"><strong>{result.return_percent.toFixed(2)}%</strong></TableCell></TableRow>
-                          <TableRow><TableCell>Avg Win</TableCell><TableCell align="right" sx={{ color: "success.main" }}>${result.avg_win.toFixed(2)}</TableCell></TableRow>
-                          <TableRow><TableCell>Avg Loss</TableCell><TableCell align="right" sx={{ color: "error.main" }}>${result.avg_loss.toFixed(2)}</TableCell></TableRow>
+                          <TableRow><TableCell>Avg Win</TableCell><TableCell align="right" sx={{ color: "success.main" }}>${(result.average_win ?? 0).toFixed(2)}</TableCell></TableRow>
+                          <TableRow><TableCell>Avg Loss</TableCell><TableCell align="right" sx={{ color: "error.main" }}>${(result.average_loss ?? 0).toFixed(2)}</TableCell></TableRow>
                           <TableRow><TableCell>Max Consecutive Wins</TableCell><TableCell align="right">{result.max_consecutive_wins}</TableCell></TableRow>
                           <TableRow><TableCell>Max Consecutive Losses</TableCell><TableCell align="right">{result.max_consecutive_losses}</TableCell></TableRow>
                           <TableRow><TableCell>Expectancy</TableCell><TableCell align="right"><strong>${result.expectancy.toFixed(2)}</strong></TableCell></TableRow>

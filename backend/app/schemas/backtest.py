@@ -49,3 +49,4 @@ class BacktestResponse(BaseModel):
     losing_trades: int
     total_profit: float
     total_loss: float
+    equity_curve: list[float] = []

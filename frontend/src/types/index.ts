@@ -95,15 +95,20 @@ export interface BacktestResult {
   net_profit: number;
   profit_factor: number;
   sharpe_ratio: number;
-  max_drawdown: number;
+  max_drawdown_percent: number;
   return_percent: number;
   max_consecutive_wins: number;
   max_consecutive_losses: number;
-  avg_win: number;
-  avg_loss: number;
+  average_win: number;
+  average_loss: number;
   largest_win: number;
   largest_loss: number;
   expectancy: number;
+  initial_balance: number;
+  final_balance: number;
+  total_profit: number;
+  total_loss: number;
+  total_bars: number;
   equity_curve: number[];
 }
 
