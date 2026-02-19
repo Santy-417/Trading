@@ -25,15 +25,34 @@ const STRATEGIES = ["fibonacci", "ict", "hybrid_ml"];
 const SYMBOLS = ["EURUSD", "XAUUSD"];
 const TIMEFRAMES = ["M5", "M15", "H1", "H4", "D1"];
 
-export default function BotControl() {
-  const { botStatus, setBotStatus } = useAppStore();
+interface BotControlProps {
+  embedded?: boolean;
+}
+
+export default function BotControl({ embedded = false }: BotControlProps) {
+  const { botStatus, setBotStatus, activeSymbol, setActiveSymbol } = useAppStore();
   const [strategy, setStrategy] = useState("fibonacci");
-  const [symbol, setSymbol] = useState("EURUSD");
   const [timeframe, setTimeframe] = useState("H1");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const isRunning = botStatus?.state === "running";
+  const killSwitchActive = botStatus?.risk?.kill_switch_active === true;
+
+  const handleResetKill = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      await api.post("/bot/reset-kill", {});
+      // Refresh bot status
+      const { data } = await api.get("/bot/status");
+      setBotStatus(data);
+    } catch {
+      setError("Failed to reset kill switch");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleStart = async () => {
     setLoading(true);
@@ -41,7 +60,7 @@ export default function BotControl() {
     try {
       const { data } = await api.post("/bot/start", {
         strategy,
-        symbols: [symbol],
+        symbols: [activeSymbol],
         timeframe,
         risk_per_trade: 1.0,
         lot_mode: "percent_risk",
@@ -80,88 +99,110 @@ export default function BotControl() {
     }
   };
 
-  return (
-    <Card>
-      <CardContent>
+  const content = (
+    <>
+      {!embedded && (
         <Typography variant="h6" sx={{ mb: 2 }}>
           Bot Control
         </Typography>
+      )}
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
-            {error}
-          </Alert>
-        )}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
+          {error}
+        </Alert>
+      )}
 
-        {isRunning ? (
-          <Box>
-            <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-              <Chip label={`Strategy: ${botStatus.strategy}`} color="primary" />
-              <Chip label={`Symbols: ${botStatus.symbols?.join(", ")}`} />
-              <Chip label={`TF: ${botStatus.timeframe}`} />
-            </Stack>
-            <Stack direction="row" spacing={1}>
-              <Button
-                variant="contained"
-                color="warning"
-                startIcon={<StopIcon />}
-                onClick={handleStop}
-                disabled={loading}
-              >
-                Stop Bot
-              </Button>
-              <Button
-                variant="contained"
-                color="error"
-                startIcon={<ReportProblemIcon />}
-                onClick={handleKill}
-                disabled={loading}
-              >
-                Kill Switch
-              </Button>
-            </Stack>
-          </Box>
-        ) : (
-          <Box>
-            <Stack spacing={2} sx={{ mb: 2 }}>
-              <FormControl size="small" fullWidth>
-                <InputLabel>Strategy</InputLabel>
-                <Select value={strategy} label="Strategy" onChange={(e) => setStrategy(e.target.value)}>
-                  {STRATEGIES.map((s) => (
-                    <MenuItem key={s} value={s}>{s}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl size="small" fullWidth>
-                <InputLabel>Symbol</InputLabel>
-                <Select value={symbol} label="Symbol" onChange={(e) => setSymbol(e.target.value)}>
-                  {SYMBOLS.map((s) => (
-                    <MenuItem key={s} value={s}>{s}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl size="small" fullWidth>
-                <InputLabel>Timeframe</InputLabel>
-                <Select value={timeframe} label="Timeframe" onChange={(e) => setTimeframe(e.target.value)}>
-                  {TIMEFRAMES.map((tf) => (
-                    <MenuItem key={tf} value={tf}>{tf}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Stack>
+      {killSwitchActive && (
+        <Alert
+          severity="warning"
+          sx={{ mb: 2 }}
+          action={
+            <Button color="inherit" size="small" onClick={handleResetKill} disabled={loading}>
+              Reset
+            </Button>
+          }
+        >
+          Kill switch is active. Reset to trade.
+        </Alert>
+      )}
+
+      {isRunning ? (
+        <Box>
+          <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: "wrap" }}>
+            <Chip label={`Strategy: ${botStatus.strategy}`} color="primary" size="small" />
+            <Chip label={`Symbols: ${botStatus.symbols?.join(", ")}`} size="small" />
+            <Chip label={`TF: ${botStatus.timeframe}`} size="small" />
+          </Stack>
+          <Stack direction="row" spacing={1}>
             <Button
               variant="contained"
-              color="success"
-              startIcon={<PlayArrowIcon />}
-              onClick={handleStart}
+              color="warning"
+              startIcon={<StopIcon />}
+              onClick={handleStop}
               disabled={loading}
-              fullWidth
             >
-              Start Bot
+              Stop Bot
             </Button>
-          </Box>
-        )}
-      </CardContent>
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={<ReportProblemIcon />}
+              onClick={handleKill}
+              disabled={loading}
+            >
+              Kill Switch
+            </Button>
+          </Stack>
+        </Box>
+      ) : (
+        <Box>
+          <Stack spacing={2} sx={{ mb: 2 }}>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Strategy</InputLabel>
+              <Select value={strategy} label="Strategy" onChange={(e) => setStrategy(e.target.value)}>
+                {STRATEGIES.map((s) => (
+                  <MenuItem key={s} value={s}>{s}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Symbol</InputLabel>
+              <Select value={activeSymbol} label="Symbol" onChange={(e) => setActiveSymbol(e.target.value)}>
+                {SYMBOLS.map((s) => (
+                  <MenuItem key={s} value={s}>{s}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" fullWidth>
+              <InputLabel>Timeframe</InputLabel>
+              <Select value={timeframe} label="Timeframe" onChange={(e) => setTimeframe(e.target.value)}>
+                {TIMEFRAMES.map((tf) => (
+                  <MenuItem key={tf} value={tf}>{tf}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+          <Button
+            variant="contained"
+            color="success"
+            startIcon={<PlayArrowIcon />}
+            onClick={handleStart}
+            disabled={loading}
+            fullWidth
+          >
+            Start Bot
+          </Button>
+        </Box>
+      )}
+    </>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <Card>
+      <CardContent>{content}</CardContent>
     </Card>
   );
 }

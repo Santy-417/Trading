@@ -33,3 +33,22 @@ class BotKillResponse(BaseModel):
     message: str
     positions_closed: list[dict]
     error: str | None = None
+
+
+class AccountInfoResponse(BaseModel):
+    balance: float
+    equity: float
+    profit: float
+    margin: float
+    free_margin: float
+    leverage: int
+    currency: str
+    name: str
+    server: str
+
+
+class BotLogEntry(BaseModel):
+    timestamp: str
+    level: str
+    message: str
+    symbol: str | None = None

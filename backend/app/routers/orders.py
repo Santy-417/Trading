@@ -55,6 +55,18 @@ async def close_position(
     return await service.close_position(body.ticket, ip=_get_ip(request))
 
 
+@router.get("/symbol-info")
+async def get_symbol_info(
+    symbol: str = Query(default="EURUSD"),
+    _user: dict = Depends(get_current_user),
+):
+    """Get symbol info including current bid/ask and stops level."""
+    from app.integrations.metatrader.mt5_client import mt5_client
+
+    await mt5_client.initialize()
+    return await mt5_client.get_symbol_info(symbol)
+
+
 @router.get("/open")
 async def get_open_positions(
     _user: dict = Depends(get_current_user),

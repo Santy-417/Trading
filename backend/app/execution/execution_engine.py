@@ -1,4 +1,5 @@
 import asyncio
+from collections import deque
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -9,6 +10,8 @@ from app.strategies import get_strategy
 from app.strategies.base import BaseStrategy, SignalDirection, TradeSignal
 
 logger = get_logger(__name__)
+
+_MAX_LOG_ENTRIES = 200
 
 
 class BotState(str, Enum):
@@ -40,6 +43,24 @@ class ExecutionEngine:
         self._timeframe: str = "H1"
         self._task: asyncio.Task | None = None
         self._loop_interval: int = 60  # seconds between checks
+        self._log_buffer: deque[dict] = deque(maxlen=_MAX_LOG_ENTRIES)
+
+    def _log(self, level: str, message: str, symbol: str | None = None) -> None:
+        """Log a message and store it in the buffer."""
+        entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "level": level,
+            "message": message,
+            "symbol": symbol,
+        }
+        self._log_buffer.append(entry)
+        log_fn = getattr(logger, level.lower(), logger.info)
+        log_fn(message)
+
+    def get_logs(self, limit: int = 50) -> list[dict]:
+        """Return the most recent log entries."""
+        entries = list(self._log_buffer)
+        return entries[-limit:]
 
     @property
     def state(self) -> BotState:
@@ -55,8 +76,13 @@ class ExecutionEngine:
     ) -> None:
         """Start the trading bot."""
         if self._state == BotState.RUNNING:
-            logger.warning("bot_already_running")
+            self._log("warning", "Bot already running, ignoring start request")
             return
+
+        # Deactivate kill switch if it was active (user explicitly restarting)
+        if self._risk.kill_switch.is_activated:
+            self._risk.deactivate_kill_switch()
+            self._log("info", "Kill switch deactivated (bot restarted)")
 
         # Initialize MT5
         await self._mt5.initialize()
@@ -73,9 +99,11 @@ class ExecutionEngine:
         self._loop_interval = loop_interval
         self._state = BotState.RUNNING
 
-        logger.info(
-            "bot_started: strategy=%s, symbols=%s, timeframe=%s",
-            strategy_name, symbols, timeframe,
+        self._log(
+            "info",
+            f"Bot started: strategy={strategy_name}, symbols={symbols}, "
+            f"timeframe={timeframe}, interval={loop_interval}s, "
+            f"balance=${account['balance']:,.2f}",
         )
 
         # Start the main loop
@@ -95,7 +123,7 @@ class ExecutionEngine:
                 pass
 
         await self._mt5.shutdown()
-        logger.info("bot_stopped")
+        self._log("info", "Bot stopped")
 
     async def kill(self, close_positions: bool = True) -> dict:
         """
@@ -105,7 +133,6 @@ class ExecutionEngine:
 
         result = {"positions_closed": []}
         if close_positions:
-            # Re-initialize MT5 if needed
             try:
                 await self._mt5.initialize()
                 close_results = await self._mt5.close_all_positions()
@@ -113,11 +140,11 @@ class ExecutionEngine:
                     {"ticket": r.ticket, "success": r.success} for r in close_results
                 ]
             except Exception as e:
-                logger.error("kill_close_positions_failed: error=%s", str(e))
+                self._log("error", f"Kill switch failed to close positions: {e}")
                 result["error"] = str(e)
 
         await self.stop()
-        logger.critical("bot_killed: close_positions=%s", close_positions)
+        self._log("error", f"KILL SWITCH activated, close_positions={close_positions}")
         return result
 
     async def _run_loop(self) -> None:
@@ -130,12 +157,12 @@ class ExecutionEngine:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error("bot_loop_error: error=%s", str(e))
+                self._log("error", f"Bot loop error: {e}")
                 self._state = BotState.ERROR
                 break
 
     async def _process_symbol(self, symbol: str) -> None:
-        """Process a single symbol: get data → generate signal → execute."""
+        """Process a single symbol: get data -> generate signal -> execute."""
         if self._strategy is None:
             return
 
@@ -143,14 +170,22 @@ class ExecutionEngine:
         try:
             tf = Timeframe(self._timeframe)
             df = await self._mt5.get_historical_data(symbol, tf, count=200)
+            self._log("info", f"[{symbol}] Fetched {len(df)} bars ({self._timeframe})", symbol)
         except Exception as e:
-            logger.error("data_fetch_failed: symbol=%s, error=%s", symbol, str(e))
+            self._log("error", f"[{symbol}] Data fetch failed: {e}", symbol)
             return
 
         # 2. Generate signal
         signal = self._strategy.generate_signal(df, symbol, self._timeframe)
         if signal is None:
+            self._log("info", f"[{symbol}] No signal from {self._strategy.name} strategy", symbol)
             return
+
+        self._log(
+            "info",
+            f"[{symbol}] Signal: {signal.direction.value} @ SL={signal.stop_loss}, TP={signal.take_profit}",
+            symbol,
+        )
 
         # 3. Risk check
         account = await self._mt5.get_account_info()
@@ -160,10 +195,7 @@ class ExecutionEngine:
         )
 
         if not risk_result.allowed:
-            logger.warning(
-                "trade_blocked_by_risk: symbol=%s, reason=%s",
-                symbol, risk_result.reason,
-            )
+            self._log("warning", f"[{symbol}] Trade blocked by risk: {risk_result.reason}", symbol)
             return
 
         # 4. Calculate lot size
@@ -194,16 +226,18 @@ class ExecutionEngine:
 
         if trade_result.success:
             self._risk.record_trade()
-            logger.info(
-                "trade_executed: symbol=%s, direction=%s, lot=%s, ticket=%s, entry=%s, sl=%s, tp=%s, strategy=%s",
-                symbol, direction.value, lot_size, trade_result.ticket,
-                trade_result.price, signal.stop_loss, signal.take_profit,
-                self._strategy.name,
+            self._log(
+                "info",
+                f"[{symbol}] Trade executed: {direction.value} {lot_size} lots, "
+                f"ticket=#{trade_result.ticket}, entry={trade_result.price}, "
+                f"SL={signal.stop_loss}, TP={signal.take_profit}",
+                symbol,
             )
         else:
-            logger.error(
-                "trade_execution_failed: symbol=%s, retcode=%s, comment=%s",
-                symbol, trade_result.retcode, trade_result.comment,
+            self._log(
+                "error",
+                f"[{symbol}] Trade failed: retcode={trade_result.retcode}, {trade_result.comment}",
+                symbol,
             )
 
     def get_status(self) -> dict:

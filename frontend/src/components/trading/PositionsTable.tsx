@@ -78,8 +78,8 @@ export default function PositionsTable({ positions, onRefresh }: PositionsTableP
                     <TableCell align="right">{pos.volume}</TableCell>
                     <TableCell align="right">{pos.price_open.toFixed(5)}</TableCell>
                     <TableCell align="right">{pos.price_current.toFixed(5)}</TableCell>
-                    <TableCell align="right">{pos.stop_loss.toFixed(5)}</TableCell>
-                    <TableCell align="right">{pos.take_profit.toFixed(5)}</TableCell>
+                    <TableCell align="right">{pos.stop_loss && pos.stop_loss !== 0 ? pos.stop_loss.toFixed(5) : "-"}</TableCell>
+                    <TableCell align="right">{pos.take_profit && pos.take_profit !== 0 ? pos.take_profit.toFixed(5) : "-"}</TableCell>
                     <TableCell
                       align="right"
                       sx={{ color: pos.profit >= 0 ? "success.main" : "error.main", fontWeight: 600 }}

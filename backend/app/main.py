@@ -12,13 +12,16 @@ from app.core.rate_limit import limiter
 from app.routers import ai, backtest, bot, health, metrics, ml, orders
 
 settings = get_settings()
-setup_logging("DEBUG" if settings.app_debug else "INFO")
+setup_logging("INFO")
 logger = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Application startup [env=%s]", settings.app_env)
+    logger.info("[OK] Settings validated for environment: %s", settings.app_env)
+    logger.info("     - API: /api/v1")
+    logger.info("     - Debug: %s", settings.app_debug)
+    logger.info("     - CORS: %s", settings.cors_origins)
     yield
     logger.info("Application shutdown")
 

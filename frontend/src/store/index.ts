@@ -18,6 +18,10 @@ interface AppState {
   sidebarOpen: boolean;
   toggleSidebar: () => void;
 
+  // Active Symbol
+  activeSymbol: string;
+  setActiveSymbol: (symbol: string) => void;
+
   // Loading
   loading: Record<string, boolean>;
   setLoading: (key: string, value: boolean) => void;
@@ -35,6 +39,9 @@ export const useAppStore = create<AppState>((set) => ({
 
   sidebarOpen: true,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+
+  activeSymbol: "EURUSD",
+  setActiveSymbol: (symbol) => set({ activeSymbol: symbol }),
 
   loading: {},
   setLoading: (key, value) =>

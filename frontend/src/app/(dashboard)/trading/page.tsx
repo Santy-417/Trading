@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Box, Typography } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import TradingViewWidget from "@/components/charts/TradingViewWidget";
-import BotControl from "@/components/trading/BotControl";
+import TradePanel from "@/components/trading/TradePanel";
+import AccountOverview from "@/components/trading/AccountOverview";
 import PositionsTable from "@/components/trading/PositionsTable";
 import StatCard from "@/components/common/StatCard";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
@@ -16,8 +17,15 @@ import { useAppStore } from "@/store";
 import type { Position, PerformanceMetrics } from "@/types";
 
 export default function TradingPage() {
-  const { positions, setPositions, setBotStatus } = useAppStore();
+  const { positions, setPositions, setBotStatus, activeSymbol } = useAppStore();
   const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null);
+
+  // Map symbol to TradingView format
+  const getTradingViewSymbol = (symbol: string) => {
+    if (symbol === "EURUSD") return "FX:EURUSD";
+    if (symbol === "XAUUSD") return "TVC:GOLD";
+    return "FX:EURUSD"; // fallback
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -36,17 +44,19 @@ export default function TradingPage() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 10000);
+    const interval = setInterval(fetchData, 2000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
   return (
     <Box>
-      <Typography variant="h4" sx={{ mb: 3 }}>
+      <Typography variant="h4" sx={{ mb: 2 }}>
         Live Trading
       </Typography>
 
-      <Grid container spacing={2} sx={{ mb: 3 }}>
+      <AccountOverview />
+
+      <Grid container spacing={2} sx={{ mb: 2 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard
             title="Net Profit"
@@ -83,15 +93,15 @@ export default function TradingPage() {
       </Grid>
 
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 9 }}>
-          <TradingViewWidget symbol="FX:EURUSD" />
+        <Grid size={{ xs: 12, md: 8.4 }}>
+          <TradingViewWidget symbol={getTradingViewSymbol(activeSymbol)} height={800} />
         </Grid>
-        <Grid size={{ xs: 12, md: 3 }}>
-          <BotControl />
+        <Grid size={{ xs: 12, md: 3.6 }}>
+          <TradePanel />
         </Grid>
       </Grid>
 
-      <Box sx={{ mt: 3 }}>
+      <Box sx={{ mt: 2 }}>
         <PositionsTable positions={positions} onRefresh={fetchData} />
       </Box>
     </Box>

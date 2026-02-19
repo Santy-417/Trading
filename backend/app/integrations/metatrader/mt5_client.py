@@ -135,6 +135,25 @@ class MT5Client:
             if not mt5.symbol_select(symbol, True):
                 raise ValueError(f"Failed to select symbol '{symbol}'")
 
+    def _get_filling_mode(self, symbol: str) -> int:
+        """Get the appropriate filling mode for a symbol based on what it supports."""
+        info = mt5.symbol_info(symbol)
+        if info is None:
+            # Fallback to IOC
+            return mt5.ORDER_FILLING_IOC
+
+        filling_mode = info.filling_mode
+        # Check supported modes in priority order: FOK > IOC > RETURN
+        if filling_mode & 1:  # SYMBOL_FILLING_FOK
+            return mt5.ORDER_FILLING_FOK
+        elif filling_mode & 2:  # SYMBOL_FILLING_IOC
+            return mt5.ORDER_FILLING_IOC
+        elif filling_mode & 4:  # SYMBOL_FILLING_RETURN (most brokers support this)
+            return mt5.ORDER_FILLING_RETURN
+        else:
+            # Default fallback
+            return mt5.ORDER_FILLING_RETURN
+
     @_with_retry(max_retries=3)
     async def send_market_order(
         self,
@@ -159,6 +178,7 @@ class MT5Client:
             order_type = (
                 mt5.ORDER_TYPE_BUY if direction == OrderType.BUY else mt5.ORDER_TYPE_SELL
             )
+            filling_mode = self._get_filling_mode(symbol)
 
             request = {
                 "action": mt5.TRADE_ACTION_DEAL,
@@ -170,7 +190,7 @@ class MT5Client:
                 "magic": magic,
                 "comment": comment,
                 "type_time": mt5.ORDER_TIME_GTC,
-                "type_filling": mt5.ORDER_FILLING_IOC,
+                "type_filling": filling_mode,
             }
 
             if sl is not None:
@@ -228,6 +248,8 @@ class MT5Client:
             if order_type is None:
                 raise ValueError(f"Invalid pending order type: {direction}")
 
+            filling_mode = self._get_filling_mode(symbol)
+
             request = {
                 "action": mt5.TRADE_ACTION_PENDING,
                 "symbol": symbol,
@@ -238,7 +260,7 @@ class MT5Client:
                 "magic": magic,
                 "comment": comment,
                 "type_time": mt5.ORDER_TIME_GTC,
-                "type_filling": mt5.ORDER_FILLING_IOC,
+                "type_filling": filling_mode,
             }
 
             if sl is not None:
@@ -285,6 +307,7 @@ class MT5Client:
             )
             tick = mt5.symbol_info_tick(pos.symbol)
             price = tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask
+            filling_mode = self._get_filling_mode(pos.symbol)
 
             request = {
                 "action": mt5.TRADE_ACTION_DEAL,
@@ -297,7 +320,7 @@ class MT5Client:
                 "magic": pos.magic,
                 "comment": "close",
                 "type_time": mt5.ORDER_TIME_GTC,
-                "type_filling": mt5.ORDER_FILLING_IOC,
+                "type_filling": filling_mode,
             }
 
             result = mt5.order_send(request)
@@ -336,7 +359,10 @@ class MT5Client:
         def _get():
             positions = mt5.positions_get()
             if positions is None:
+                logger.warning("MT5 positions_get returned None")
                 return []
+
+            logger.info(f"MT5 returned {len(positions)} open positions")
             return [
                 {
                     "ticket": p.ticket,
@@ -345,19 +371,21 @@ class MT5Client:
                     "volume": p.volume,
                     "price_open": p.price_open,
                     "price_current": p.price_current,
-                    "sl": p.sl,
-                    "tp": p.tp,
+                    "stop_loss": p.sl,
+                    "take_profit": p.tp,
                     "profit": p.profit,
                     "swap": p.swap,
-                    "commission": p.commission,
+                    "commission": 0.0,  # Commission not available for open positions
                     "magic": p.magic,
                     "comment": p.comment,
-                    "time": datetime.fromtimestamp(p.time),
+                    "time_open": datetime.fromtimestamp(p.time).isoformat(),
                 }
                 for p in positions
             ]
 
-        return await asyncio.to_thread(_get)
+        result = await asyncio.to_thread(_get)
+        logger.info(f"get_open_positions returning {len(result)} positions")
+        return result
 
     async def get_historical_data(
         self,
@@ -423,6 +451,7 @@ class MT5Client:
         def _get():
             self._validate_symbol(symbol)
             info = mt5.symbol_info(symbol)
+            tick = mt5.symbol_info_tick(symbol)
             return {
                 "name": info.name,
                 "spread": info.spread,
@@ -432,6 +461,9 @@ class MT5Client:
                 "volume_min": info.volume_min,
                 "volume_max": info.volume_max,
                 "volume_step": info.volume_step,
+                "trade_stops_level": info.trade_stops_level,
+                "bid": tick.bid if tick else 0,
+                "ask": tick.ask if tick else 0,
             }
 
         return await asyncio.to_thread(_get)

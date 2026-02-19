@@ -10,15 +10,23 @@ export interface BotStartRequest {
   strategy_params?: Record<string, unknown>;
 }
 
+export interface RiskStatus {
+  kill_switch_active: boolean;
+  kill_switch_reason: string | null;
+  circuit_breaker_tripped: boolean;
+  circuit_breaker_reason: string | null;
+}
+
 export interface BotStatusResponse {
   state: string;
   strategy: string | null;
   symbols: string[];
   timeframe: string | null;
-  risk_per_trade: number;
-  max_daily_loss: number;
-  lot_mode: string;
-  uptime_seconds: number | null;
+  risk_per_trade?: number;
+  max_daily_loss?: number;
+  lot_mode?: string;
+  uptime_seconds?: number | null;
+  risk?: RiskStatus;
 }
 
 // ─── Orders ───────────────────────────────────────────
@@ -146,6 +154,27 @@ export interface MLModel {
 export interface AIResponse {
   analysis: string;
   model_used: string;
+}
+
+// ─── Account ─────────────────────────────────────────
+export interface AccountInfo {
+  balance: number;
+  equity: number;
+  profit: number;
+  margin: number;
+  free_margin: number;
+  leverage: number;
+  currency: string;
+  name: string;
+  server: string;
+}
+
+// ─── Bot Logs ────────────────────────────────────────
+export interface BotLogEntry {
+  timestamp: string;
+  level: string;
+  message: string;
+  symbol?: string;
 }
 
 // ─── Metrics ──────────────────────────────────────────

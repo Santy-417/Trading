@@ -16,7 +16,7 @@ def _get_engine():
     connect_args = {"statement_cache_size": 0} if is_pooler else {}
     return create_async_engine(
         settings.database_url,
-        echo=settings.is_development,
+        echo=False,
         pool_pre_ping=True,
         connect_args=connect_args,
         **({"poolclass": pool.NullPool} if is_pooler else {"pool_size": 5, "max_overflow": 10}),

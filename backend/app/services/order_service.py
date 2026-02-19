@@ -11,9 +11,9 @@ logger = get_logger(__name__)
 
 
 class OrderService:
-    def __init__(self, session: AsyncSession):
-        self.trade_repo = TradeRepository(session)
-        self.audit_repo = AuditRepository(session)
+    def __init__(self, session: AsyncSession | None):
+        self.trade_repo = TradeRepository(session) if session else None
+        self.audit_repo = AuditRepository(session) if session else None
 
     async def market_order(
         self, request: MarketOrderRequest, ip: str | None = None
@@ -26,6 +26,7 @@ class OrderService:
         )
 
         if not risk_result.allowed:
+            logger.warning(f"Trade blocked by risk manager: {risk_result.reason}")
             return {"success": False, "comment": risk_result.reason}
 
         direction = OrderType.BUY if request.direction.upper() == "BUY" else OrderType.SELL
@@ -46,31 +47,46 @@ class OrderService:
         )
 
         if result.success:
+            logger.info(f"Market order successful: {request.symbol} {request.direction} {volume} @ {result.price}, ticket={result.ticket}")
             risk_manager.record_trade()
-            await self.trade_repo.create(
-                symbol=request.symbol,
-                direction=request.direction.upper(),
-                lot_size=volume,
-                entry_price=result.price or 0,
-                stop_loss=request.stop_loss,
-                take_profit=request.take_profit,
-                strategy="manual",
-                timeframe="N/A",
-                mt5_ticket=result.ticket,
-                status="open",
-            )
-            await self.audit_repo.create(
-                action="order_executed",
-                entity_type="trade",
-                entity_id=str(result.ticket),
-                details={
-                    "symbol": request.symbol,
-                    "direction": request.direction,
-                    "volume": volume,
-                    "price": result.price,
-                },
-                ip_address=ip,
-            )
+
+            # Save to database only if session is available
+            if self.trade_repo is not None:
+                try:
+                    await self.trade_repo.create(
+                        symbol=request.symbol,
+                        direction=request.direction.upper(),
+                        lot_size=volume,
+                        entry_price=result.price or 0,
+                        stop_loss=request.stop_loss,
+                        take_profit=request.take_profit,
+                        strategy="manual",
+                        timeframe="N/A",
+                        mt5_ticket=result.ticket,
+                        status="open",
+                    )
+                    logger.info(f"Trade saved to DB: ticket={result.ticket}")
+                except Exception as e:
+                    logger.error(f"Failed to save trade to DB: {e}")
+
+            if self.audit_repo is not None:
+                try:
+                    await self.audit_repo.create(
+                        action="order_executed",
+                        entity_type="trade",
+                        entity_id=str(result.ticket),
+                        details={
+                            "symbol": request.symbol,
+                            "direction": request.direction,
+                            "volume": volume,
+                            "price": result.price,
+                        },
+                        ip_address=ip,
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to save audit log: {e}")
+        else:
+            logger.warning(f"Market order failed: {result.comment} (retcode={result.retcode})")
 
         return {
             "success": result.success,
@@ -123,22 +139,37 @@ class OrderService:
         result = await mt5_client.close_position(ticket)
 
         if result.success:
-            # Update trade record
-            trade = await self.trade_repo.get_by_ticket(ticket)
-            if trade:
-                await self.trade_repo.close_trade(
-                    trade_id=trade.id,
-                    exit_price=result.price or 0,
-                    profit=0,  # Will be updated from MT5 history
-                )
+            logger.info(f"Position closed successfully: ticket={ticket}, price={result.price}")
 
-            await self.audit_repo.create(
-                action="position_closed",
-                entity_type="trade",
-                entity_id=str(ticket),
-                details={"price": result.price},
-                ip_address=ip,
-            )
+            # Update trade record only if session is available
+            if self.trade_repo is not None:
+                try:
+                    trade = await self.trade_repo.get_by_ticket(ticket)
+                    if trade:
+                        await self.trade_repo.close_trade(
+                            trade_id=trade.id,
+                            exit_price=result.price or 0,
+                            profit=0,  # Will be updated from MT5 history
+                        )
+                        logger.info(f"Trade record updated in DB: ticket={ticket}")
+                    else:
+                        logger.warning(f"Trade not found in DB: ticket={ticket}")
+                except Exception as e:
+                    logger.error(f"Failed to update trade in DB: {e}")
+
+            if self.audit_repo is not None:
+                try:
+                    await self.audit_repo.create(
+                        action="position_closed",
+                        entity_type="trade",
+                        entity_id=str(ticket),
+                        details={"price": result.price},
+                        ip_address=ip,
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to save audit log: {e}")
+        else:
+            logger.warning(f"Failed to close position: ticket={ticket}, {result.comment}")
 
         return {
             "success": result.success,
@@ -149,7 +180,13 @@ class OrderService:
         }
 
     async def get_open_positions(self) -> list[dict]:
-        return await mt5_client.get_open_positions()
+        try:
+            positions = await mt5_client.get_open_positions()
+            logger.info(f"Fetched {len(positions)} open positions from MT5")
+            return positions
+        except Exception as e:
+            logger.error(f"Failed to fetch open positions: {e}")
+            raise
 
     async def get_trade_history(
         self,
