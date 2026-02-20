@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { Box, Typography } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import TradingViewWidget from "@/components/charts/TradingViewWidget";
@@ -8,17 +8,13 @@ import TradePanel from "@/components/trading/TradePanel";
 import AccountOverview from "@/components/trading/AccountOverview";
 import PositionsTable from "@/components/trading/PositionsTable";
 import StatCard from "@/components/common/StatCard";
-import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import ShowChartIcon from "@mui/icons-material/ShowChart";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import { TrendingUp, Activity, Layers, AlertTriangle } from "lucide-react";
 import api from "@/lib/api";
 import { useAppStore } from "@/store";
-import type { Position, PerformanceMetrics } from "@/types";
+import type { AccountInfo, PendingOrder, Position } from "@/types";
 
 export default function TradingPage() {
-  const { positions, setPositions, setBotStatus, activeSymbol } = useAppStore();
-  const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null);
+  const { positions, setPositions, setBotStatus, activeSymbol, accountInfo, setAccountInfo, setPendingOrders, pendingOrders } = useAppStore();
 
   // Map symbol to TradingView format
   const getTradingViewSymbol = (symbol: string) => {
@@ -29,18 +25,20 @@ export default function TradingPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [posRes, statusRes, metricsRes] = await Promise.allSettled([
+      const [posRes, statusRes, accountRes, pendingRes] = await Promise.allSettled([
         api.get<Position[]>("/orders/open"),
         api.get("/bot/status"),
-        api.get("/metrics/performance"),
+        api.get<AccountInfo>("/bot/account"),
+        api.get<PendingOrder[]>("/orders/pending"),
       ]);
       if (posRes.status === "fulfilled") setPositions(posRes.value.data);
       if (statusRes.status === "fulfilled") setBotStatus(statusRes.value.data);
-      if (metricsRes.status === "fulfilled") setMetrics(metricsRes.value.data);
+      if (accountRes.status === "fulfilled") setAccountInfo(accountRes.value.data);
+      if (pendingRes.status === "fulfilled") setPendingOrders(pendingRes.value.data);
     } catch {
       // Silent fail on initial load
     }
-  }, [setPositions, setBotStatus]);
+  }, [setPositions, setBotStatus, setAccountInfo, setPendingOrders]);
 
   useEffect(() => {
     fetchData();
@@ -56,45 +54,53 @@ export default function TradingPage() {
 
       <AccountOverview />
 
-      <Grid container spacing={2} sx={{ mb: 2 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="Net Profit"
-            value={metrics ? `$${(metrics.net_profit ?? 0).toFixed(2)}` : "$0.00"}
-            icon={TrendingUpIcon}
-            color="#22c55e"
-            trend={metrics && metrics.net_profit >= 0 ? "up" : "down"}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="Win Rate"
-            value={metrics ? `${(metrics.win_rate ?? 0).toFixed(1)}%` : "0%"}
-            icon={ShowChartIcon}
-            color="#3b82f6"
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="Open Positions"
-            value={metrics?.open_positions ?? positions.length}
-            icon={AccountBalanceIcon}
-            color="#8b5cf6"
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="Max Drawdown"
-            value={metrics ? `$${(metrics.max_drawdown ?? 0).toFixed(2)}` : "$0.00"}
-            icon={WarningAmberIcon}
-            color="#f59e0b"
-          />
-        </Grid>
-      </Grid>
+      {(() => {
+        // Derive all stat values from accountInfo (single source of truth)
+        const netProfit = accountInfo?.profit ?? 0;
+        // Drawdown = unrealized loss (profit when negative), 0 when positive
+        const maxDrawdown = accountInfo ? Math.max(0, -accountInfo.profit) : 0;
+        return (
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <StatCard
+                title="Net Profit"
+                value={`$${netProfit.toFixed(2)}`}
+                icon={TrendingUp}
+                color={netProfit >= 0 ? "#22c55e" : "#ef4444"}
+                trend={netProfit >= 0 ? "up" : "down"}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <StatCard
+                title="Win Rate"
+                value="--"
+                icon={Activity}
+                color="#3b82f6"
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <StatCard
+                title="Open Positions"
+                value={positions.length}
+                icon={Layers}
+                color="#8b5cf6"
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <StatCard
+                title="Max Drawdown"
+                value={`$${maxDrawdown.toFixed(2)}`}
+                icon={AlertTriangle}
+                color={maxDrawdown > 0 ? "#ef4444" : "#f59e0b"}
+              />
+            </Grid>
+          </Grid>
+        );
+      })()}
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 8.4 }}>
-          <TradingViewWidget symbol={getTradingViewSymbol(activeSymbol)} height={800} />
+          <TradingViewWidget symbol={getTradingViewSymbol(activeSymbol)} height="calc(100vh - 170px)" />
         </Grid>
         <Grid size={{ xs: 12, md: 3.6 }}>
           <TradePanel />
@@ -102,7 +108,7 @@ export default function TradingPage() {
       </Grid>
 
       <Box sx={{ mt: 2 }}>
-        <PositionsTable positions={positions} onRefresh={fetchData} />
+        <PositionsTable positions={positions} onRefresh={fetchData} pendingOrders={pendingOrders} />
       </Box>
     </Box>
   );

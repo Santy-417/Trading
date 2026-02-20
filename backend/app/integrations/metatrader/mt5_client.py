@@ -343,6 +343,167 @@ class MT5Client:
         )
         return trade_result
 
+    async def modify_position(
+        self,
+        ticket: int,
+        sl: float | None = None,
+        tp: float | None = None,
+    ) -> TradeResult:
+        """Modify stop loss and/or take profit of an existing position."""
+        self._ensure_initialized()
+
+        def _execute():
+            positions = mt5.positions_get(ticket=ticket)
+            if not positions:
+                return TradeResult(success=False, comment=f"Position {ticket} not found", retcode=-1)
+
+            pos = positions[0]
+            request = {
+                "action": mt5.TRADE_ACTION_SLTP,
+                "symbol": pos.symbol,
+                "position": ticket,
+                "sl": sl if sl is not None else pos.sl,
+                "tp": tp if tp is not None else pos.tp,
+            }
+
+            result = mt5.order_send(request)
+            if result is None:
+                raise RuntimeError(f"Modify position returned None: {mt5.last_error()}")
+
+            return TradeResult(
+                success=result.retcode == mt5.TRADE_RETCODE_DONE,
+                ticket=ticket,
+                comment=result.comment,
+                retcode=result.retcode,
+            )
+
+        trade_result = await asyncio.to_thread(_execute)
+        logger.info(
+            "mt5_modify_position: ticket=%s, sl=%s, tp=%s, success=%s",
+            ticket, sl, tp, trade_result.success,
+        )
+        return trade_result
+
+    async def partial_close(self, ticket: int, volume: float) -> TradeResult:
+        """Partially close an open position by specifying the volume to close."""
+        self._ensure_initialized()
+
+        def _execute():
+            positions = mt5.positions_get(ticket=ticket)
+            if not positions:
+                raise ValueError(f"Position {ticket} not found")
+
+            pos = positions[0]
+            close_type = (
+                mt5.ORDER_TYPE_SELL
+                if pos.type == mt5.ORDER_TYPE_BUY
+                else mt5.ORDER_TYPE_BUY
+            )
+            tick = mt5.symbol_info_tick(pos.symbol)
+            price = tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask
+            filling_mode = self._get_filling_mode(pos.symbol)
+
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": pos.symbol,
+                "volume": volume,
+                "type": close_type,
+                "position": ticket,
+                "price": price,
+                "deviation": 20,
+                "magic": pos.magic,
+                "comment": f"partial_close_{volume}",
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": filling_mode,
+            }
+
+            result = mt5.order_send(request)
+            if result is None:
+                raise RuntimeError(f"Partial close returned None: {mt5.last_error()}")
+
+            return TradeResult(
+                success=result.retcode == mt5.TRADE_RETCODE_DONE,
+                ticket=result.order if result.retcode == mt5.TRADE_RETCODE_DONE else None,
+                price=result.price,
+                volume=result.volume,
+                comment=result.comment,
+                retcode=result.retcode,
+            )
+
+        trade_result = await asyncio.to_thread(_execute)
+        logger.info(
+            "mt5_partial_close: ticket=%s, volume=%s, success=%s",
+            ticket, volume, trade_result.success,
+        )
+        return trade_result
+
+    async def get_pending_orders(self) -> list[dict[str, Any]]:
+        """Get all pending orders (limit/stop orders not yet triggered)."""
+        self._ensure_initialized()
+
+        TYPE_MAP = {
+            mt5.ORDER_TYPE_BUY_LIMIT: "BUY_LIMIT",
+            mt5.ORDER_TYPE_SELL_LIMIT: "SELL_LIMIT",
+            mt5.ORDER_TYPE_BUY_STOP: "BUY_STOP",
+            mt5.ORDER_TYPE_SELL_STOP: "SELL_STOP",
+            mt5.ORDER_TYPE_BUY_STOP_LIMIT: "BUY_STOP_LIMIT",
+            mt5.ORDER_TYPE_SELL_STOP_LIMIT: "SELL_STOP_LIMIT",
+        }
+
+        def _get():
+            orders = mt5.orders_get()
+            if orders is None:
+                return []
+            return [
+                {
+                    "ticket": o.ticket,
+                    "symbol": o.symbol,
+                    "type": TYPE_MAP.get(o.type, str(o.type)),
+                    "volume_initial": o.volume_initial,
+                    "volume_current": o.volume_current,
+                    "price_open": o.price_open,
+                    "stop_loss": o.sl,
+                    "take_profit": o.tp,
+                    "price_current": o.price_current,
+                    "comment": o.comment,
+                    "time_setup": datetime.fromtimestamp(o.time_setup).isoformat(),
+                }
+                for o in orders
+                if o.type in TYPE_MAP
+            ]
+
+        result = await asyncio.to_thread(_get)
+        logger.info("get_pending_orders returning %d orders", len(result))
+        return result
+
+    async def cancel_order(self, ticket: int) -> TradeResult:
+        """Cancel a pending order by ticket number."""
+        self._ensure_initialized()
+
+        def _execute():
+            orders = mt5.orders_get(ticket=ticket)
+            if not orders:
+                return TradeResult(success=False, comment=f"Order {ticket} not found", retcode=-1)
+
+            request = {
+                "action": mt5.TRADE_ACTION_REMOVE,
+                "order": ticket,
+            }
+            result = mt5.order_send(request)
+            if result is None:
+                raise RuntimeError(f"Cancel order returned None: {mt5.last_error()}")
+
+            return TradeResult(
+                success=result.retcode == mt5.TRADE_RETCODE_DONE,
+                ticket=ticket,
+                comment=result.comment,
+                retcode=result.retcode,
+            )
+
+        trade_result = await asyncio.to_thread(_execute)
+        logger.info("mt5_cancel_order: ticket=%s, success=%s", ticket, trade_result.success)
+        return trade_result
+
     async def close_all_positions(self) -> list[TradeResult]:
         """Close all open positions. Used by kill switch."""
         positions = await self.get_open_positions()

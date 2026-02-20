@@ -120,6 +120,18 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
 ) -> dict:
     """Extract and validate the current user from JWT."""
+    settings = get_settings()
+
+    # Development mode: bypass auth with mock token
+    if settings.app_env == "development" and credentials.credentials == "dev-bypass-token":
+        logger.info("dev_mode_auth_bypass: using mock user")
+        return {
+            "id": "dev-user-00000000-0000-0000-0000-000000000000",
+            "email": "dev@localhost",
+            "role": "authenticated",
+        }
+
+    # Production: validate real JWT
     payload = decode_jwt(credentials.credentials)
     user_id = payload.get("sub")
     if not user_id:

@@ -44,7 +44,7 @@ CREATE TABLE public.trades (
   swap NUMERIC(20, 2) NOT NULL DEFAULT 0,
   strategy VARCHAR(50) NOT NULL,
   timeframe VARCHAR(10) NOT NULL,
-  mt5_ticket BIGINT UNIQUE,
+  mt5_ticket BIGINT UNIQUE,  -- BIGINT to support large MT5 ticket numbers
   status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed', 'pending')),
   opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   closed_at TIMESTAMPTZ,

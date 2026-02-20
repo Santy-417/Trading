@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Index, Numeric, String, func
+from sqlalchemy import BigInteger, DateTime, Index, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDMixin
@@ -22,7 +22,7 @@ class Trade(Base, UUIDMixin, TimestampMixin):
     swap: Mapped[Decimal] = mapped_column(Numeric(10, 4), default=Decimal("0"))
     strategy: Mapped[str] = mapped_column(String(50), nullable=False)
     timeframe: Mapped[str] = mapped_column(String(10), nullable=False)
-    mt5_ticket: Mapped[int | None] = mapped_column()
+    mt5_ticket: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="open"
     )  # open / closed / cancelled

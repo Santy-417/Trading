@@ -9,7 +9,7 @@ def calculate_metrics(trades: pd.DataFrame, initial_balance: float = 10000.0) ->
     Expected columns: profit, entry_price, exit_price, direction, lot_size
     """
     if trades.empty:
-        return _empty_metrics()
+        return _empty_metrics(initial_balance)
 
     profits = trades["profit"].values
     winning = profits[profits > 0]
@@ -99,7 +99,7 @@ def _consecutive_streaks(profits: np.ndarray) -> tuple[int, int]:
     return max_wins, max_losses
 
 
-def _empty_metrics() -> dict:
+def _empty_metrics(initial_balance: float = 0.0) -> dict:
     return {
         "total_trades": 0,
         "winning_trades": 0,
@@ -118,8 +118,8 @@ def _empty_metrics() -> dict:
         "expectancy": 0.0,
         "max_consecutive_wins": 0,
         "max_consecutive_losses": 0,
-        "initial_balance": 0.0,
-        "final_balance": 0.0,
+        "initial_balance": initial_balance,
+        "final_balance": initial_balance,
         "return_percent": 0.0,
         "equity_curve": [],
     }

@@ -8,10 +8,6 @@ import {
   CardContent,
   Chip,
   CircularProgress,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
   TextField,
   Typography,
   Alert,
@@ -21,9 +17,9 @@ import {
   TableHead,
   TableRow,
 } from "@mui/material";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 import Grid from "@mui/material/Grid";
-import ModelTrainingIcon from "@mui/icons-material/ModelTraining";
-import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
+import { Brain, Sparkles } from "lucide-react";
 import api from "@/lib/api";
 import type { TrainResponse, PredictResponse, MLModel } from "@/types";
 
@@ -85,22 +81,27 @@ export default function MLPage() {
                 Train New Model
               </Typography>
               <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <FormControl size="small" fullWidth>
-                  <InputLabel>Symbol</InputLabel>
-                  <Select value={symbol} label="Symbol" onChange={(e) => setSymbol(e.target.value)}>
-                    {["EURUSD", "XAUUSD"].map((s) => (
-                      <MenuItem key={s} value={s}>{s}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl size="small" fullWidth>
-                  <InputLabel>Timeframe</InputLabel>
-                  <Select value={timeframe} label="Timeframe" onChange={(e) => setTimeframe(e.target.value)}>
-                    {["M5", "M15", "H1", "H4", "D1"].map((tf) => (
-                      <MenuItem key={tf} value={tf}>{tf}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <SelectDropdown
+                  label="Symbol"
+                  value={symbol}
+                  onValueChange={setSymbol}
+                  options={[
+                    { id: "EURUSD", label: "EUR/USD", description: "Euro vs US Dollar" },
+                    { id: "XAUUSD", label: "XAU/USD", description: "Gold vs US Dollar" },
+                  ]}
+                />
+                <SelectDropdown
+                  label="Timeframe"
+                  value={timeframe}
+                  onValueChange={setTimeframe}
+                  options={[
+                    { id: "M5", label: "M5", description: "5 minutes" },
+                    { id: "M15", label: "M15", description: "15 minutes" },
+                    { id: "H1", label: "H1", description: "1 hour" },
+                    { id: "H4", label: "H4", description: "4 hours" },
+                    { id: "D1", label: "D1", description: "Daily" },
+                  ]}
+                />
                 <TextField
                   size="small"
                   label="Historical Bars"
@@ -110,7 +111,7 @@ export default function MLPage() {
                 />
                 <Button
                   variant="contained"
-                  startIcon={loading ? <CircularProgress size={18} /> : <ModelTrainingIcon />}
+                  startIcon={loading ? <CircularProgress size={18} /> : <Brain size={18} />}
                   onClick={handleTrain}
                   disabled={loading}
                   fullWidth
@@ -206,7 +207,7 @@ export default function MLPage() {
                         <TableCell>{m.timeframe}</TableCell>
                         <TableCell>{new Date(m.created_at).toLocaleDateString()}</TableCell>
                         <TableCell align="center">
-                          <Button size="small" startIcon={<AutoFixHighIcon />} onClick={() => handlePredict(m.model_id)}>
+                          <Button size="small" startIcon={<Sparkles size={16} />} onClick={() => handlePredict(m.model_id)}>
                             Predict
                           </Button>
                         </TableCell>

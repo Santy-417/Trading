@@ -6,10 +6,6 @@ import {
   Button,
   Card,
   CardContent,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
   TextField,
   Typography,
   Alert,
@@ -20,8 +16,9 @@ import {
   Chip,
   CircularProgress,
 } from "@mui/material";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 import Grid from "@mui/material/Grid";
-import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import { Play } from "lucide-react";
 import EquityChart from "@/components/charts/EquityChart";
 import api from "@/lib/api";
 import type { BacktestResult } from "@/types";
@@ -76,30 +73,37 @@ export default function BacktestPage() {
                 Configuration
               </Typography>
               <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <FormControl size="small" fullWidth>
-                  <InputLabel>Strategy</InputLabel>
-                  <Select value={strategy} label="Strategy" onChange={(e) => setStrategy(e.target.value)}>
-                    {["fibonacci", "ict", "hybrid_ml"].map((s) => (
-                      <MenuItem key={s} value={s}>{s}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl size="small" fullWidth>
-                  <InputLabel>Symbol</InputLabel>
-                  <Select value={symbol} label="Symbol" onChange={(e) => setSymbol(e.target.value)}>
-                    {["EURUSD", "XAUUSD"].map((s) => (
-                      <MenuItem key={s} value={s}>{s}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl size="small" fullWidth>
-                  <InputLabel>Timeframe</InputLabel>
-                  <Select value={timeframe} label="Timeframe" onChange={(e) => setTimeframe(e.target.value)}>
-                    {["M5", "M15", "H1", "H4", "D1"].map((tf) => (
-                      <MenuItem key={tf} value={tf}>{tf}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <SelectDropdown
+                  label="Strategy"
+                  value={strategy}
+                  onValueChange={setStrategy}
+                  options={[
+                    { id: "fibonacci", label: "Fibonacci", description: "Fibonacci retracement/extension" },
+                    { id: "ict", label: "ICT", description: "Order blocks, FVG, liquidity" },
+                    { id: "hybrid_ml", label: "Hybrid ML", description: "Rules + XGBoost ML combined" },
+                  ]}
+                />
+                <SelectDropdown
+                  label="Symbol"
+                  value={symbol}
+                  onValueChange={setSymbol}
+                  options={[
+                    { id: "EURUSD", label: "EUR/USD", description: "Euro vs US Dollar" },
+                    { id: "XAUUSD", label: "XAU/USD", description: "Gold vs US Dollar" },
+                  ]}
+                />
+                <SelectDropdown
+                  label="Timeframe"
+                  value={timeframe}
+                  onValueChange={setTimeframe}
+                  options={[
+                    { id: "M5", label: "M5", description: "5 minutes" },
+                    { id: "M15", label: "M15", description: "15 minutes" },
+                    { id: "H1", label: "H1", description: "1 hour" },
+                    { id: "H4", label: "H4", description: "4 hours" },
+                    { id: "D1", label: "D1", description: "Daily" },
+                  ]}
+                />
                 <TextField
                   size="small"
                   label="Bars"
@@ -124,7 +128,7 @@ export default function BacktestPage() {
                 />
                 <Button
                   variant="contained"
-                  startIcon={loading ? <CircularProgress size={18} /> : <PlayArrowIcon />}
+                  startIcon={loading ? <CircularProgress size={18} /> : <Play size={18} />}
                   onClick={handleRun}
                   disabled={loading}
                   fullWidth

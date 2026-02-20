@@ -6,6 +6,7 @@ from app.repositories.audit_repository import AuditRepository
 from app.repositories.trade_repository import TradeRepository
 from app.risk.risk_manager import risk_manager
 from app.schemas.order import LimitOrderRequest, MarketOrderRequest
+from app.schemas.trade import TradeResponse
 
 logger = get_logger(__name__)
 
@@ -179,6 +180,79 @@ class OrderService:
             "retcode": result.retcode,
         }
 
+    async def modify_position(
+        self,
+        ticket: int,
+        sl: float | None = None,
+        tp: float | None = None,
+        volume: float | None = None,
+        ip: str | None = None,
+    ) -> dict:
+        if volume is not None:
+            result = await mt5_client.partial_close(ticket=ticket, volume=volume)
+            action = "partial_close"
+        else:
+            result = await mt5_client.modify_position(ticket=ticket, sl=sl, tp=tp)
+            action = "modify_sltp"
+
+        if result.success:
+            logger.info(f"Position {action}: ticket={ticket}, sl={sl}, tp={tp}, volume={volume}")
+            if self.audit_repo is not None:
+                try:
+                    await self.audit_repo.create(
+                        action=action,
+                        entity_type="trade",
+                        entity_id=str(ticket),
+                        details={"sl": sl, "tp": tp, "volume": volume},
+                        ip_address=ip,
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to save audit log: {e}")
+        else:
+            logger.warning(f"Position {action} failed: ticket={ticket}, {result.comment}")
+
+        return {
+            "success": result.success,
+            "ticket": result.ticket,
+            "comment": result.comment,
+            "retcode": result.retcode,
+        }
+
+    async def get_pending_orders(self) -> list[dict]:
+        try:
+            orders = await mt5_client.get_pending_orders()
+            logger.info(f"Fetched {len(orders)} pending orders from MT5")
+            return orders
+        except Exception as e:
+            logger.error(f"Failed to fetch pending orders: {e}")
+            raise
+
+    async def cancel_order(self, ticket: int, ip: str | None = None) -> dict:
+        result = await mt5_client.cancel_order(ticket)
+
+        if result.success:
+            logger.info(f"Pending order cancelled: ticket={ticket}")
+            if self.audit_repo is not None:
+                try:
+                    await self.audit_repo.create(
+                        action="order_cancelled",
+                        entity_type="trade",
+                        entity_id=str(ticket),
+                        details={"ticket": ticket},
+                        ip_address=ip,
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to save audit log: {e}")
+        else:
+            logger.warning(f"Failed to cancel order: ticket={ticket}, {result.comment}")
+
+        return {
+            "success": result.success,
+            "ticket": result.ticket,
+            "comment": result.comment,
+            "retcode": result.retcode,
+        }
+
     async def get_open_positions(self) -> list[dict]:
         try:
             positions = await mt5_client.get_open_positions()
@@ -202,8 +276,12 @@ class OrderService:
             strategy=strategy,
             status="closed",
         )
+
+        # Convert ORM objects to Pydantic models for proper JSON serialization
+        trade_responses = [TradeResponse.model_validate(trade) for trade in trades]
+
         return {
-            "trades": trades,
+            "trades": trade_responses,
             "total": total,
             "page": page,
             "page_size": page_size,

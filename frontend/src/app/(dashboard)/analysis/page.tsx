@@ -6,21 +6,14 @@ import {
   Button,
   Card,
   CardContent,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
   TextField,
   Typography,
   Alert,
   CircularProgress,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import AutoGraphIcon from "@mui/icons-material/AutoGraph";
-import AssessmentIcon from "@mui/icons-material/Assessment";
-import TuneIcon from "@mui/icons-material/Tune";
-import ShieldIcon from "@mui/icons-material/Shield";
-import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
+import { LineChart, FileText, SlidersHorizontal, Shield, ArrowLeftRight } from "lucide-react";
 import api from "@/lib/api";
 import type { AIResponse } from "@/types";
 
@@ -75,11 +68,11 @@ export default function AnalysisPage() {
   };
 
   const analysisOptions = [
-    { value: "trades", label: "Trade Analysis", icon: <AutoGraphIcon />, desc: "Analyze recent trading patterns" },
-    { value: "summary", label: "Performance Summary", icon: <AssessmentIcon />, desc: "Generate performance report" },
-    { value: "parameters", label: "Parameter Suggestions", icon: <TuneIcon />, desc: "AI-suggested risk parameters" },
-    { value: "risk", label: "Risk Review", icon: <ShieldIcon />, desc: "Review risk events and anomalies" },
-    { value: "compare", label: "Strategy Comparison", icon: <CompareArrowsIcon />, desc: "Compare strategy performance" },
+    { value: "trades", label: "Trade Analysis", icon: <LineChart size={20} />, desc: "Analyze recent trading patterns" },
+    { value: "summary", label: "Performance Summary", icon: <FileText size={20} />, desc: "Generate performance report" },
+    { value: "parameters", label: "Parameter Suggestions", icon: <SlidersHorizontal size={20} />, desc: "AI-suggested risk parameters" },
+    { value: "risk", label: "Risk Review", icon: <Shield size={20} />, desc: "Review risk events and anomalies" },
+    { value: "compare", label: "Strategy Comparison", icon: <ArrowLeftRight size={20} />, desc: "Compare strategy performance" },
   ];
 
   return (
@@ -126,18 +119,20 @@ export default function AnalysisPage() {
                   />
                 )}
                 {analysisType === "summary" && (
-                  <FormControl size="small" fullWidth>
-                    <InputLabel>Period</InputLabel>
-                    <Select value={period} label="Period" onChange={(e) => setPeriod(e.target.value)}>
-                      <MenuItem value="weekly">Weekly</MenuItem>
-                      <MenuItem value="monthly">Monthly</MenuItem>
-                    </Select>
-                  </FormControl>
+                  <SelectDropdown
+                    label="Period"
+                    value={period}
+                    onValueChange={setPeriod}
+                    options={[
+                      { id: "weekly", label: "Weekly", description: "Last 7 days summary" },
+                      { id: "monthly", label: "Monthly", description: "Last 30 days summary" },
+                    ]}
+                  />
                 )}
                 <Button
                   variant="contained"
                   color="secondary"
-                  startIcon={loading ? <CircularProgress size={18} /> : <AutoGraphIcon />}
+                  startIcon={loading ? <CircularProgress size={18} /> : <LineChart size={18} />}
                   onClick={handleAnalyze}
                   disabled={loading}
                   fullWidth

@@ -64,6 +64,20 @@ export interface Position {
   time_open: string;
 }
 
+export interface PendingOrder {
+  ticket: number;
+  symbol: string;
+  type: string;
+  volume_initial: number;
+  volume_current: number;
+  price_open: number;
+  stop_loss: number;
+  take_profit: number;
+  price_current: number;
+  comment: string;
+  time_setup: string;
+}
+
 // ─── Trades ───────────────────────────────────────────
 export interface Trade {
   id: string;

@@ -8,6 +8,14 @@ const api = axios.create({
 
 // Attach JWT token to every request
 api.interceptors.request.use(async (config) => {
+  // In development, skip auth token requirement
+  if (process.env.NODE_ENV === 'development') {
+    // Use mock token for development (backend should also bypass auth in dev)
+    config.headers.Authorization = `Bearer dev-bypass-token`;
+    return config;
+  }
+
+  // Production: require real JWT token
   const {
     data: { session },
   } = await supabase.auth.getSession();

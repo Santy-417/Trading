@@ -24,6 +24,16 @@ class ClosePositionRequest(BaseModel):
     ticket: int
 
 
+class ModifyPositionRequest(BaseModel):
+    ticket: int
+    stop_loss: float | None = None
+    take_profit: float | None = None
+    volume: float | None = Field(
+        default=None,
+        description="Partial close volume — leave None to only update SL/TP",
+    )
+
+
 class OrderResponse(BaseModel):
     success: bool
     ticket: int | None = None

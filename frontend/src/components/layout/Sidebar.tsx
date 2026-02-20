@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Box,
@@ -10,56 +11,69 @@ import {
   ListItemText,
   Typography,
   Divider,
+  IconButton,
 } from "@mui/material";
-import DashboardIcon from "@mui/icons-material/Dashboard";
-import ShowChartIcon from "@mui/icons-material/ShowChart";
-import HistoryIcon from "@mui/icons-material/History";
-import PsychologyIcon from "@mui/icons-material/Psychology";
-import AutoGraphIcon from "@mui/icons-material/AutoGraph";
-import ShieldIcon from "@mui/icons-material/Shield";
-import DescriptionIcon from "@mui/icons-material/Description";
-import SettingsIcon from "@mui/icons-material/Settings";
+import {
+  Home,
+  TrendingUp,
+  History,
+  Brain,
+  LineChart,
+  Shield,
+  FileText,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 
-const DRAWER_WIDTH = 260;
+const DRAWER_WIDTH_EXPANDED = 240;
+const DRAWER_WIDTH_COLLAPSED = 64;
 
 const NAV_ITEMS = [
-  { label: "Dashboard", path: "/", icon: <DashboardIcon /> },
-  { label: "Trading", path: "/trading", icon: <ShowChartIcon /> },
-  { label: "Backtest", path: "/backtest", icon: <HistoryIcon /> },
-  { label: "ML Models", path: "/ml", icon: <PsychologyIcon /> },
-  { label: "AI Analysis", path: "/analysis", icon: <AutoGraphIcon /> },
-  { label: "Risk", path: "/risk", icon: <ShieldIcon /> },
-  { label: "Audit Log", path: "/audit", icon: <DescriptionIcon /> },
+  { label: "Dashboard", path: "/", icon: <Home size={20} /> },
+  { label: "Trading", path: "/trading", icon: <TrendingUp size={20} /> },
+  { label: "Backtest", path: "/backtest", icon: <History size={20} /> },
+  { label: "ML Models", path: "/ml", icon: <Brain size={20} /> },
+  { label: "AI Analysis", path: "/analysis", icon: <LineChart size={20} /> },
+  { label: "Risk", path: "/risk", icon: <Shield size={20} /> },
+  { label: "Audit Log", path: "/audit", icon: <FileText size={20} /> },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [collapsed, setCollapsed] = useState(false);
+
+  const drawerWidth = collapsed ? DRAWER_WIDTH_COLLAPSED : DRAWER_WIDTH_EXPANDED;
 
   return (
     <Drawer
       variant="permanent"
       sx={{
-        width: DRAWER_WIDTH,
+        width: drawerWidth,
         flexShrink: 0,
         "& .MuiDrawer-paper": {
-          width: DRAWER_WIDTH,
+          width: drawerWidth,
+          transition: "width 0.3s ease-in-out",
           boxSizing: "border-box",
           bgcolor: "background.paper",
-          borderRight: "1px solid rgba(148,163,184,0.1)",
+          borderRight: "1px solid",
+          borderColor: "divider",
         },
       }}
     >
-      <Box sx={{ p: 2.5, display: "flex", alignItems: "center", gap: 1.5 }}>
-        <ShowChartIcon color="primary" sx={{ fontSize: 32 }} />
-        <Box>
-          <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
-            ForexAI
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Trading Platform
-          </Typography>
-        </Box>
+      <Box sx={{ p: 2.5, display: "flex", alignItems: "center", gap: 1.5, justifyContent: collapsed ? "center" : "flex-start" }}>
+        <TrendingUp size={32} className="text-blue-500" />
+        {!collapsed && (
+          <Box>
+            <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
+              ForexAI
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Trading Platform
+            </Typography>
+          </Box>
+        )}
       </Box>
 
       <Divider sx={{ borderColor: "rgba(148,163,184,0.1)" }} />
@@ -71,24 +85,34 @@ export default function Sidebar() {
             selected={pathname === item.path}
             onClick={() => router.push(item.path)}
             sx={{
-              borderRadius: 2,
+              borderRadius: collapsed ? 1 : 2,
               mb: 0.5,
+              justifyContent: collapsed ? "center" : "flex-start",
+              px: collapsed ? 1 : 2,
+              "&:hover": {
+                bgcolor: "rgba(59, 130, 246, 0.04)",
+              },
               "&.Mui-selected": {
-                bgcolor: "rgba(59,130,246,0.12)",
-                "&:hover": { bgcolor: "rgba(59,130,246,0.18)" },
+                bgcolor: "rgba(59, 130, 246, 0.08)",
+                borderLeft: "2px solid #3b82f6",
+                "&:hover": {
+                  bgcolor: "rgba(59, 130, 246, 0.12)"
+                },
               },
             }}
           >
-            <ListItemIcon sx={{ minWidth: 40, color: pathname === item.path ? "primary.main" : "text.secondary" }}>
+            <ListItemIcon sx={{ minWidth: collapsed ? 0 : 40, color: pathname === item.path ? "primary.main" : "text.secondary" }}>
               {item.icon}
             </ListItemIcon>
-            <ListItemText
-              primary={item.label}
-              primaryTypographyProps={{
-                fontSize: 14,
-                fontWeight: pathname === item.path ? 600 : 400,
-              }}
-            />
+            {!collapsed && (
+              <ListItemText
+                primary={item.label}
+                primaryTypographyProps={{
+                  fontSize: 14,
+                  fontWeight: pathname === item.path ? 600 : 400,
+                }}
+              />
+            )}
           </ListItemButton>
         ))}
       </List>
@@ -97,13 +121,38 @@ export default function Sidebar() {
         <Divider sx={{ borderColor: "rgba(148,163,184,0.1)", mb: 1 }} />
         <ListItemButton
           onClick={() => router.push("/settings")}
-          sx={{ borderRadius: 2 }}
+          sx={{
+            borderRadius: collapsed ? 1 : 2,
+            justifyContent: collapsed ? "center" : "flex-start",
+            px: collapsed ? 1 : 2,
+            "&:hover": {
+              bgcolor: "rgba(59, 130, 246, 0.04)",
+            },
+          }}
         >
-          <ListItemIcon sx={{ minWidth: 40, color: "text.secondary" }}>
-            <SettingsIcon />
+          <ListItemIcon sx={{ minWidth: collapsed ? 0 : 40, color: "text.secondary" }}>
+            <Settings size={20} />
           </ListItemIcon>
-          <ListItemText primary="Settings" primaryTypographyProps={{ fontSize: 14 }} />
+          {!collapsed && (
+            <ListItemText primary="Settings" primaryTypographyProps={{ fontSize: 14 }} />
+          )}
         </ListItemButton>
+
+        {/* Toggle Button */}
+        <Box sx={{ mt: 1, borderTop: 1, borderColor: "divider", pt: 1 }}>
+          <IconButton
+            onClick={() => setCollapsed(!collapsed)}
+            sx={{
+              width: "100%",
+              borderRadius: 1,
+              "&:hover": {
+                bgcolor: "rgba(59, 130, 246, 0.04)",
+              },
+            }}
+          >
+            {collapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+          </IconButton>
+        </Box>
       </Box>
     </Drawer>
   );

@@ -11,10 +11,7 @@ import {
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import StatCard from "@/components/common/StatCard";
-import ShieldIcon from "@mui/icons-material/Shield";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
-import BlockIcon from "@mui/icons-material/Block";
-import TrendingDownIcon from "@mui/icons-material/TrendingDown";
+import { Shield, AlertTriangle, Ban, TrendingDown } from "lucide-react";
 import api from "@/lib/api";
 
 interface RiskStatus {
@@ -70,7 +67,7 @@ export default function RiskPage() {
           <StatCard
             title="Kill Switch"
             value={status?.kill_switch_active ? "ACTIVE" : "Inactive"}
-            icon={BlockIcon}
+            icon={Ban}
             color={status?.kill_switch_active ? "#ef4444" : "#22c55e"}
           />
         </Grid>
@@ -79,7 +76,7 @@ export default function RiskPage() {
             title="Drawdown"
             value={cb ? `${cb.current_drawdown.toFixed(1)}%` : "0%"}
             subtitle={cb ? `Limit: ${cb.max_drawdown_limit}%` : ""}
-            icon={TrendingDownIcon}
+            icon={TrendingDown}
             color={cb?.drawdown_breached ? "#ef4444" : "#f59e0b"}
           />
         </Grid>
@@ -88,7 +85,7 @@ export default function RiskPage() {
             title="Daily Loss"
             value={cb ? `$${cb.daily_loss.toFixed(2)}` : "$0"}
             subtitle={cb ? `Limit: $${cb.max_daily_loss.toFixed(2)}` : ""}
-            icon={WarningAmberIcon}
+            icon={AlertTriangle}
             color={cb?.daily_loss_breached ? "#ef4444" : "#3b82f6"}
           />
         </Grid>
@@ -97,7 +94,7 @@ export default function RiskPage() {
             title="Trades/Hour"
             value={cb ? `${cb.trades_this_hour}` : "0"}
             subtitle={cb ? `Limit: ${cb.max_trades_per_hour}` : ""}
-            icon={ShieldIcon}
+            icon={Shield}
             color={cb?.overtrading_breached ? "#ef4444" : "#8b5cf6"}
           />
         </Grid>

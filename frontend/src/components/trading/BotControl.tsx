@@ -6,24 +6,34 @@ import {
   Button,
   Card,
   CardContent,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
   Typography,
   Alert,
   Chip,
   Stack,
 } from "@mui/material";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import StopIcon from "@mui/icons-material/Stop";
 import ReportProblemIcon from "@mui/icons-material/ReportProblem";
 import api from "@/lib/api";
 import { useAppStore } from "@/store";
 
-const STRATEGIES = ["fibonacci", "ict", "hybrid_ml"];
-const SYMBOLS = ["EURUSD", "XAUUSD"];
-const TIMEFRAMES = ["M5", "M15", "H1", "H4", "D1"];
+const STRATEGIES = [
+  { id: "fibonacci", label: "Fibonacci", description: "Fibonacci retracement/extension" },
+  { id: "ict", label: "ICT", description: "Order blocks, FVG, liquidity sweeps" },
+  { id: "hybrid_ml", label: "Hybrid ML", description: "Rules + XGBoost ML combined" },
+];
+const SYMBOLS = [
+  { id: "EURUSD", label: "EUR/USD", description: "Euro vs US Dollar" },
+  { id: "XAUUSD", label: "XAU/USD", description: "Gold vs US Dollar" },
+];
+const TIMEFRAMES = [
+  { id: "M5", label: "M5", description: "5 minutes" },
+  { id: "M15", label: "M15", description: "15 minutes" },
+  { id: "H1", label: "H1", description: "1 hour" },
+  { id: "H4", label: "H4", description: "4 hours" },
+  { id: "D1", label: "D1", description: "Daily" },
+];
 
 interface BotControlProps {
   embedded?: boolean;
@@ -158,30 +168,9 @@ export default function BotControl({ embedded = false }: BotControlProps) {
       ) : (
         <Box>
           <Stack spacing={2} sx={{ mb: 2 }}>
-            <FormControl size="small" fullWidth>
-              <InputLabel>Strategy</InputLabel>
-              <Select value={strategy} label="Strategy" onChange={(e) => setStrategy(e.target.value)}>
-                {STRATEGIES.map((s) => (
-                  <MenuItem key={s} value={s}>{s}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl size="small" fullWidth>
-              <InputLabel>Symbol</InputLabel>
-              <Select value={activeSymbol} label="Symbol" onChange={(e) => setActiveSymbol(e.target.value)}>
-                {SYMBOLS.map((s) => (
-                  <MenuItem key={s} value={s}>{s}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl size="small" fullWidth>
-              <InputLabel>Timeframe</InputLabel>
-              <Select value={timeframe} label="Timeframe" onChange={(e) => setTimeframe(e.target.value)}>
-                {TIMEFRAMES.map((tf) => (
-                  <MenuItem key={tf} value={tf}>{tf}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <SelectDropdown options={STRATEGIES} value={strategy} onValueChange={setStrategy} label="Strategy" />
+            <SelectDropdown options={SYMBOLS} value={activeSymbol} onValueChange={setActiveSymbol} label="Symbol" />
+            <SelectDropdown options={TIMEFRAMES} value={timeframe} onValueChange={setTimeframe} label="Timeframe" />
           </Stack>
           <Button
             variant="contained"

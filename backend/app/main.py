@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.core.logging_config import get_logger, setup_logging
 from app.core.middleware import setup_middleware
 from app.core.rate_limit import limiter
+from app.integrations.metatrader.mt5_client import mt5_client
 from app.routers import ai, backtest, bot, health, metrics, ml, orders
 
 settings = get_settings()
@@ -22,8 +23,24 @@ async def lifespan(app: FastAPI):
     logger.info("     - API: /api/v1")
     logger.info("     - Debug: %s", settings.app_debug)
     logger.info("     - CORS: %s", settings.cors_origins)
+
+    # Initialize MT5 connection on startup so backtesting and ML endpoints
+    # are available without needing to start the bot first.
+    try:
+        await mt5_client.initialize()
+        logger.info("[OK] MT5 connection established on startup")
+    except Exception as exc:
+        logger.warning(
+            "MT5 initialization failed on startup (trading features unavailable): %s", exc
+        )
+
     yield
+
     logger.info("Application shutdown")
+    try:
+        await mt5_client.shutdown()
+    except Exception:
+        pass
 
 
 app = FastAPI(

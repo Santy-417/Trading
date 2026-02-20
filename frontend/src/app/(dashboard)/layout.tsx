@@ -11,6 +11,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Skip auth check in development mode
+    if (process.env.NODE_ENV === 'development') {
+      setLoading(false);
+      return;
+    }
+
+    // Production: require authentication
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
         router.push("/login");

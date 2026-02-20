@@ -14,12 +14,9 @@ import {
   TableRow,
   Typography,
   TablePagination,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
   Stack,
 } from "@mui/material";
+import { SelectDropdown } from "@/components/ui/select-dropdown";
 import api from "@/lib/api";
 import type { Trade } from "@/types";
 
@@ -43,8 +40,8 @@ export default function AuditPage() {
       const { data } = await api.get("/orders/history", { params });
       setTrades(data.trades || []);
       setTotal(data.total || 0);
-    } catch {
-      // Silent fail
+    } catch (error) {
+      console.error("Failed to fetch trade history:", error);
     }
   }, [page, rowsPerPage, symbolFilter, strategyFilter]);
 
@@ -61,32 +58,32 @@ export default function AuditPage() {
       <Card>
         <CardContent>
           <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-            <FormControl size="small" sx={{ minWidth: 140 }}>
-              <InputLabel>Symbol</InputLabel>
-              <Select
-                value={symbolFilter}
+            <Box sx={{ minWidth: 140 }}>
+              <SelectDropdown
                 label="Symbol"
-                onChange={(e) => { setSymbolFilter(e.target.value); setPage(0); }}
-              >
-                <MenuItem value="">All</MenuItem>
-                <MenuItem value="EURUSD">EURUSD</MenuItem>
-                <MenuItem value="XAUUSD">XAUUSD</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 140 }}>
-              <InputLabel>Strategy</InputLabel>
-              <Select
-                value={strategyFilter}
+                value={symbolFilter}
+                onValueChange={(v) => { setSymbolFilter(v); setPage(0); }}
+                options={[
+                  { id: "", label: "All Symbols" },
+                  { id: "EURUSD", label: "EUR/USD" },
+                  { id: "XAUUSD", label: "XAU/USD" },
+                ]}
+              />
+            </Box>
+            <Box sx={{ minWidth: 140 }}>
+              <SelectDropdown
                 label="Strategy"
-                onChange={(e) => { setStrategyFilter(e.target.value); setPage(0); }}
-              >
-                <MenuItem value="">All</MenuItem>
-                <MenuItem value="fibonacci">Fibonacci</MenuItem>
-                <MenuItem value="ict">ICT</MenuItem>
-                <MenuItem value="hybrid_ml">Hybrid ML</MenuItem>
-                <MenuItem value="manual">Manual</MenuItem>
-              </Select>
-            </FormControl>
+                value={strategyFilter}
+                onValueChange={(v) => { setStrategyFilter(v); setPage(0); }}
+                options={[
+                  { id: "", label: "All Strategies" },
+                  { id: "fibonacci", label: "Fibonacci" },
+                  { id: "ict", label: "ICT" },
+                  { id: "hybrid_ml", label: "Hybrid ML" },
+                  { id: "manual", label: "Manual" },
+                ]}
+              />
+            </Box>
           </Stack>
 
           <TableContainer>

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { BotStatusResponse, PerformanceMetrics, Position } from "@/types";
+import type { AccountInfo, BotStatusResponse, PendingOrder, PerformanceMetrics, Position } from "@/types";
 
 interface AppState {
   // Bot
@@ -10,9 +10,17 @@ interface AppState {
   positions: Position[];
   setPositions: (positions: Position[]) => void;
 
+  // Pending Orders
+  pendingOrders: PendingOrder[];
+  setPendingOrders: (orders: PendingOrder[]) => void;
+
   // Metrics
   metrics: PerformanceMetrics | null;
   setMetrics: (metrics: PerformanceMetrics | null) => void;
+
+  // Account info (MT5 live data)
+  accountInfo: AccountInfo | null;
+  setAccountInfo: (info: AccountInfo | null) => void;
 
   // UI
   sidebarOpen: boolean;
@@ -34,8 +42,14 @@ export const useAppStore = create<AppState>((set) => ({
   positions: [],
   setPositions: (positions) => set({ positions }),
 
+  pendingOrders: [],
+  setPendingOrders: (orders) => set({ pendingOrders: orders }),
+
   metrics: null,
   setMetrics: (metrics) => set({ metrics }),
+
+  accountInfo: null,
+  setAccountInfo: (info) => set({ accountInfo: info }),
 
   sidebarOpen: true,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),

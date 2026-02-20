@@ -8,8 +8,10 @@ from app.schemas.order import (
     ClosePositionRequest,
     LimitOrderRequest,
     MarketOrderRequest,
+    ModifyPositionRequest,
     OrderResponse,
 )
+from app.schemas.trade import TradeListResponse
 from app.services.order_service import OrderService
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -55,6 +57,24 @@ async def close_position(
     return await service.close_position(body.ticket, ip=_get_ip(request))
 
 
+@router.post("/modify", response_model=OrderResponse)
+@trading_limiter
+async def modify_position(
+    request: Request,
+    body: ModifyPositionRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    service = OrderService(db)
+    return await service.modify_position(
+        ticket=body.ticket,
+        sl=body.stop_loss,
+        tp=body.take_profit,
+        volume=body.volume,
+        ip=_get_ip(request),
+    )
+
+
 @router.get("/symbol-info")
 async def get_symbol_info(
     symbol: str = Query(default="EURUSD"),
@@ -75,7 +95,27 @@ async def get_open_positions(
     return await service.get_open_positions()
 
 
-@router.get("/history")
+@router.get("/pending")
+async def get_pending_orders(
+    _user: dict = Depends(get_current_user),
+):
+    service = OrderService(None)
+    return await service.get_pending_orders()
+
+
+@router.post("/cancel", response_model=OrderResponse)
+@trading_limiter
+async def cancel_order(
+    request: Request,
+    body: ClosePositionRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: dict = Depends(get_current_user),
+):
+    service = OrderService(db)
+    return await service.cancel_order(body.ticket, ip=_get_ip(request))
+
+
+@router.get("/history", response_model=TradeListResponse)
 async def get_trade_history(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),

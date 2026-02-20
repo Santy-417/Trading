@@ -1,9 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import { Box, Typography } from "@mui/material";
-import api from "@/lib/api";
-import type { AccountInfo } from "@/types";
+import { useAppStore } from "@/store";
 
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
@@ -19,24 +17,9 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
 }
 
 export default function AccountOverview() {
-  const [account, setAccount] = useState<AccountInfo | null>(null);
+  const { accountInfo } = useAppStore();
 
-  const fetchAccount = useCallback(async () => {
-    try {
-      const { data } = await api.get<AccountInfo>("/bot/account");
-      setAccount(data);
-    } catch {
-      // MT5 may not be connected
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchAccount();
-    const interval = setInterval(fetchAccount, 1000);
-    return () => clearInterval(interval);
-  }, [fetchAccount]);
-
-  if (!account) {
+  if (!accountInfo) {
     return (
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "background.paper", borderRadius: 1, p: 1.5, mb: 2 }}>
         <Typography variant="body2" color="text.secondary">
@@ -46,7 +29,7 @@ export default function AccountOverview() {
     );
   }
 
-  const profitColor = account.profit >= 0 ? "#22c55e" : "#ef4444";
+  const profitColor = accountInfo.profit >= 0 ? "#22c55e" : "#ef4444";
 
   return (
     <Box
@@ -64,19 +47,19 @@ export default function AccountOverview() {
         borderColor: "divider",
       }}
     >
-      <Stat label="Balance" value={`$${account.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}`} />
+      <Stat label="Balance" value={`$${accountInfo.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}`} />
       <Box sx={{ width: "1px", height: 30, bgcolor: "divider" }} />
-      <Stat label="Equity" value={`$${account.equity.toLocaleString("en-US", { minimumFractionDigits: 2 })}`} />
+      <Stat label="Equity" value={`$${accountInfo.equity.toLocaleString("en-US", { minimumFractionDigits: 2 })}`} />
       <Box sx={{ width: "1px", height: 30, bgcolor: "divider" }} />
-      <Stat label="Profit" value={`$${account.profit.toFixed(2)}`} color={profitColor} />
+      <Stat label="Profit" value={`$${accountInfo.profit.toFixed(2)}`} color={profitColor} />
       <Box sx={{ width: "1px", height: 30, bgcolor: "divider" }} />
-      <Stat label="Free Margin" value={`$${account.free_margin.toLocaleString("en-US", { minimumFractionDigits: 2 })}`} />
+      <Stat label="Free Margin" value={`$${accountInfo.free_margin.toLocaleString("en-US", { minimumFractionDigits: 2 })}`} />
       <Box sx={{ width: "1px", height: 30, bgcolor: "divider" }} />
-      <Stat label="Margin" value={`$${account.margin.toFixed(2)}`} />
+      <Stat label="Margin" value={`$${accountInfo.margin.toFixed(2)}`} />
       <Box sx={{ width: "1px", height: 30, bgcolor: "divider" }} />
-      <Stat label="Leverage" value={`1:${account.leverage}`} />
+      <Stat label="Leverage" value={`1:${accountInfo.leverage}`} />
       <Box sx={{ width: "1px", height: 30, bgcolor: "divider" }} />
-      <Stat label="Server" value={account.server} />
+      <Stat label="Server" value={accountInfo.server} />
     </Box>
   );
 }

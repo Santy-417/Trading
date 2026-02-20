@@ -51,7 +51,7 @@ class BacktestService:
             sharpe_ratio=metrics["sharpe_ratio"],
             max_drawdown_percent=metrics["max_drawdown_percent"],
             initial_balance=metrics["initial_balance"],
-            final_balance=metrics["final_balance"],
+            final_balance=max(metrics["final_balance"], 0.0),
             params=params,
             full_metrics=metrics,
         )

@@ -5,12 +5,12 @@ import { Box, Card, CardContent, Typography } from "@mui/material";
 
 interface TradingViewWidgetProps {
   symbol?: string;
-  height?: number;
+  height?: number | string;
 }
 
 export default function TradingViewWidget({
   symbol = "FX:EURUSD",
-  height = 500,
+  height = 600,
 }: TradingViewWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -42,15 +42,17 @@ export default function TradingViewWidget({
     containerRef.current.appendChild(script);
   }, [symbol]);
 
+  const chartHeight = typeof height === 'number' ? `${height}px` : height;
+
   return (
-    <Card>
-      <CardContent sx={{ p: 0, "&:last-child": { pb: 0 } }}>
-        <Box sx={{ p: 2, pb: 0 }}>
-          <Typography variant="h6">Chart</Typography>
-        </Box>
+    <Card sx={{ height: chartHeight, display: 'flex', flexDirection: 'column' }}>
+      <CardContent sx={{ p: 0, "&:last-child": { pb: 0 }, height: '100%', display: 'flex', flexDirection: 'column' }}>
         <Box
           ref={containerRef}
-          sx={{ height, "& .tradingview-widget-container": { height: "100%" } }}
+          sx={{
+            height: '100%',
+            "& .tradingview-widget-container": { height: "100%" }
+          }}
           className="tradingview-widget-container"
         />
       </CardContent>
