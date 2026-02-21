@@ -11,7 +11,6 @@ from app.schemas.order import (
     ModifyPositionRequest,
     OrderResponse,
 )
-from app.schemas.trade import TradeListResponse
 from app.services.order_service import OrderService
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -115,7 +114,7 @@ async def cancel_order(
     return await service.cancel_order(body.ticket, ip=_get_ip(request))
 
 
-@router.get("/history", response_model=TradeListResponse)
+@router.get("/history")
 async def get_trade_history(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),

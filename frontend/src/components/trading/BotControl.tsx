@@ -26,6 +26,13 @@ const STRATEGIES = [
 const SYMBOLS = [
   { id: "EURUSD", label: "EUR/USD", description: "Euro vs US Dollar" },
   { id: "XAUUSD", label: "XAU/USD", description: "Gold vs US Dollar" },
+  { id: "DXY", label: "DXY", description: "US Dollar Index" },
+  { id: "USDCAD", label: "USD/CAD", description: "US Dollar vs Canadian Dollar" },
+  { id: "GBPUSD", label: "GBP/USD", description: "British Pound vs US Dollar" },
+  { id: "AUDCAD", label: "AUD/CAD", description: "Australian Dollar vs Canadian Dollar" },
+  { id: "EURJPY", label: "EUR/JPY", description: "Euro vs Japanese Yen" },
+  { id: "USDJPY", label: "USD/JPY", description: "US Dollar vs Japanese Yen" },
+  { id: "EURGBP", label: "EUR/GBP", description: "Euro vs British Pound" },
 ];
 const TIMEFRAMES = [
   { id: "M5", label: "M5", description: "5 minutes" },

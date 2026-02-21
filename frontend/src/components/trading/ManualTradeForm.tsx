@@ -6,7 +6,6 @@ import {
   Button,
   Chip,
   CircularProgress,
-  TextField,
   Typography,
   Alert,
   Snackbar,
@@ -17,10 +16,18 @@ import { useAppStore } from "@/store";
 import type { OrderResponse } from "@/types";
 import { OrderTypeSelect, type OrderTypeId } from "@/components/ui/order-type-select";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 
 const SYMBOLS = [
   { id: "EURUSD", label: "EUR/USD", description: "Euro vs US Dollar" },
   { id: "XAUUSD", label: "XAU/USD", description: "Gold vs US Dollar" },
+  { id: "DXY", label: "DXY", description: "US Dollar Index" },
+  { id: "USDCAD", label: "USD/CAD", description: "US Dollar vs Canadian Dollar" },
+  { id: "GBPUSD", label: "GBP/USD", description: "British Pound vs US Dollar" },
+  { id: "AUDCAD", label: "AUD/CAD", description: "Australian Dollar vs Canadian Dollar" },
+  { id: "EURJPY", label: "EUR/JPY", description: "Euro vs Japanese Yen" },
+  { id: "USDJPY", label: "USD/JPY", description: "US Dollar vs Japanese Yen" },
+  { id: "EURGBP", label: "EUR/GBP", description: "Euro vs British Pound" },
 ];
 
 // MT5 Error Code Humanization
@@ -155,12 +162,6 @@ export default function ManualTradeForm() {
     if (e.key === "Tab" && !limitPrice && info) {
       e.preventDefault();
       setLimitPrice(formatPrice(isBuySide ? info.bid : info.ask));
-    }
-  };
-
-  const handleNumericInput = (value: string, setter: (v: string) => void) => {
-    if (value === "" || /^\d*\.?\d*$/.test(value)) {
-      setter(value);
     }
   };
 
@@ -384,11 +385,12 @@ export default function ManualTradeForm() {
 
         {/* Price field — only for pending orders */}
         {!isMarket && (
-          <TextField
+          <FormattedNumberInput
             size="small"
             label="Price"
             value={limitPrice}
-            onChange={(e) => handleNumericInput(e.target.value, setLimitPrice)}
+            onChange={setLimitPrice}
+            decimals={5}
             onKeyDown={handleLimitPriceKeyDown}
             error={!!errors.limitPrice}
             helperText={errors.limitPrice || getLimitPriceHint()}
@@ -399,11 +401,12 @@ export default function ManualTradeForm() {
         )}
 
         {/* Volume */}
-        <TextField
+        <FormattedNumberInput
           size="small"
           label="Volume (lots)"
           value={volume}
-          onChange={(e) => handleNumericInput(e.target.value, setVolume)}
+          onChange={setVolume}
+          decimals={2}
           error={!!errors.volume}
           helperText={
             errors.volume ||
@@ -414,11 +417,12 @@ export default function ManualTradeForm() {
 
         {/* Stop Loss */}
         <Box>
-          <TextField
+          <FormattedNumberInput
             size="small"
             label="Stop Loss (price)"
             value={sl}
-            onChange={(e) => handleNumericInput(e.target.value, setSl)}
+            onChange={setSl}
+            decimals={5}
             onKeyDown={handleSLKeyDown}
             error={!!errors.sl}
             helperText={errors.sl || "Optional — press TAB to autocomplete"}
@@ -458,11 +462,12 @@ export default function ManualTradeForm() {
 
         {/* Take Profit */}
         <Box>
-          <TextField
+          <FormattedNumberInput
             size="small"
             label="Take Profit (price)"
             value={tp}
-            onChange={(e) => handleNumericInput(e.target.value, setTp)}
+            onChange={setTp}
+            decimals={5}
             onKeyDown={handleTPKeyDown}
             error={!!errors.tp}
             helperText={errors.tp || "Optional — press TAB to autocomplete"}

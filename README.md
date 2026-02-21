@@ -5,14 +5,21 @@ Professional-grade automated Forex trading platform running locally on Windows w
 ## Features
 
 - Rule-based + ML trading strategies (Fibonacci, ICT, Hybrid ML)
+- **9 trading pairs:** EURUSD, XAUUSD, DXY, USDCAD, GBPUSD, AUDCAD, EURJPY, USDJPY, EURGBP
 - Strict risk management (circuit breaker, kill switch, daily loss cap, overtrading protection)
 - Professional backtesting engine with spread/commission/slippage simulation
+- **European number formatting:** Results display with dot thousand separators (5.000 instead of 5,000)
+- **User feedback:** Snackbar alerts for backtest results and errors
 - ML module with XGBoost + walk-forward validation
 - AI-powered trade analysis with OpenAI (GPT-4o-mini) — isolated, never executes trades
-- Frontend dashboard with TradingView charts, dark theme
+- Modern dark theme UI with collapsible sidebar (240px ↔ 64px)
+- 21st.dev inspired components (Radix UI + Tailwind + lucide-react icons)
+- Position modification (SL/TP updates, partial close)
+- Development auth bypass for faster iteration
+- Frontend dashboard with TradingView charts
 - Supabase Auth (JWT) with RBAC
 - Background tasks with Celery + Redis
-- Full audit logging
+- Full audit logging with commission/swap tracking
 
 ## Quick Start
 
@@ -53,13 +60,16 @@ API disponible en `http://localhost:8000/docs`
 
 ```bash
 cd frontend
-npm install
+npm install  # Includes: lucide-react, framer-motion, radix-ui, clsx, tailwind-merge
 cp .env.local.example .env.local
 # Editar .env.local con tus credenciales de Supabase
-npm run dev
+npm run dev  # OR npm run dev:clean to clear cache first
 ```
 
-Frontend disponible en `http://localhost:3000`
+Dashboard disponible en `http://localhost:3000`
+- **Development mode:** Auth bypassed automatically (no login required)
+- **Collapsible sidebar:** Click bottom toggle button to collapse/expand
+- **Dark mode:** Enabled by default with Tailwind CSS variables
 
 ### 6. Ejecutar tests
 
@@ -135,7 +145,7 @@ Trading/
 | Task Queue | Celery + Redis |
 | State Mgmt | Zustand |
 | Charts | TradingView Advanced Chart, Recharts |
-| Pairs | XAUUSD (Gold), EURUSD |
+| Pairs | EURUSD, XAUUSD, DXY, USDCAD, GBPUSD, AUDCAD, EURJPY, USDJPY, EURGBP |
 
 ## Roadmap
 
@@ -146,3 +156,23 @@ Trading/
 ## Architecture
 
 See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
+
+## Troubleshooting
+
+### Audit Logs Empty
+**Cause:** No closed trades in database yet.
+**Solution:**
+1. Close existing positions in Trading page (`/trading`), OR
+2. Run historical sync: `python backend/sync_mt5_positions.py`, OR
+3. Wait for bot to close trades naturally
+
+### Backtest Returns 0 Trades
+**Cause:** Insufficient historical data or strict strategy parameters.
+**Solution:**
+- Increase "Bars" parameter (try 10,000+)
+- Verify MT5 has historical data for selected symbol/timeframe
+- Adjust strategy parameters
+
+### Symbol Not Found Error
+**Cause:** Symbol not available in MT5 broker.
+**Solution:** Add symbol in MT5 Market Watch first

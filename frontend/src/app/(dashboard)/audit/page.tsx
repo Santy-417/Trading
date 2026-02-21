@@ -15,8 +15,10 @@ import {
   Typography,
   TablePagination,
   Stack,
+  Button,
 } from "@mui/material";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
+import { FileText } from "lucide-react";
 import api from "@/lib/api";
 import type { Trade } from "@/types";
 
@@ -67,6 +69,13 @@ export default function AuditPage() {
                   { id: "", label: "All Symbols" },
                   { id: "EURUSD", label: "EUR/USD" },
                   { id: "XAUUSD", label: "XAU/USD" },
+                  { id: "DXY", label: "DXY" },
+                  { id: "USDCAD", label: "USD/CAD" },
+                  { id: "GBPUSD", label: "GBP/USD" },
+                  { id: "AUDCAD", label: "AUD/CAD" },
+                  { id: "EURJPY", label: "EUR/JPY" },
+                  { id: "USDJPY", label: "USD/JPY" },
+                  { id: "EURGBP", label: "EUR/GBP" },
                 ]}
               />
             </Box>
@@ -104,8 +113,46 @@ export default function AuditPage() {
               <TableBody>
                 {trades.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} sx={{ textAlign: "center", py: 4 }}>
-                      <Typography variant="body2" color="text.secondary">No trades found</Typography>
+                    <TableCell colSpan={9} align="center" sx={{ py: 8 }}>
+                      <Box sx={{ textAlign: "center", maxWidth: 500, mx: "auto" }}>
+                        <FileText className="w-16 h-16 mx-auto text-gray-600 mb-4" />
+                        <Typography variant="h6" gutterBottom>
+                          No Trade History Found
+                        </Typography>
+                        <Typography color="text.secondary" sx={{ mb: 3 }}>
+                          {symbolFilter || strategyFilter ? (
+                            <>
+                              No trades match your current filters. Try adjusting or resetting filters.
+                            </>
+                          ) : (
+                            <>
+                              Your trade history is empty. Close positions in the Trading page to see them here,
+                              or run the historical sync script to import trades from MetaTrader 5.
+                            </>
+                          )}
+                        </Typography>
+
+                        {(symbolFilter || strategyFilter) && (
+                          <Button
+                            variant="outlined"
+                            onClick={() => {
+                              setSymbolFilter("");
+                              setStrategyFilter("");
+                              setPage(0);
+                            }}
+                            sx={{ mr: 2 }}
+                          >
+                            Reset Filters
+                          </Button>
+                        )}
+
+                        <Button
+                          variant="outlined"
+                          onClick={() => window.open("/backend/SYNC_INSTRUCTIONS.md", "_blank")}
+                        >
+                          View Sync Instructions
+                        </Button>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ) : (

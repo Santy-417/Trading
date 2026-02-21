@@ -18,9 +18,18 @@ export default function TradingPage() {
 
   // Map symbol to TradingView format
   const getTradingViewSymbol = (symbol: string) => {
-    if (symbol === "EURUSD") return "FX:EURUSD";
-    if (symbol === "XAUUSD") return "TVC:GOLD";
-    return "FX:EURUSD"; // fallback
+    const mapping: Record<string, string> = {
+      "EURUSD": "FX:EURUSD",
+      "XAUUSD": "TVC:GOLD",
+      "DXY": "TVC:DXY",
+      "USDCAD": "FX:USDCAD",
+      "GBPUSD": "FX:GBPUSD",
+      "AUDCAD": "FX:AUDCAD",
+      "EURJPY": "FX:EURJPY",
+      "USDJPY": "FX:USDJPY",
+      "EURGBP": "FX:EURGBP",
+    };
+    return mapping[symbol] || "FX:EURUSD"; // fallback
   };
 
   const fetchData = useCallback(async () => {

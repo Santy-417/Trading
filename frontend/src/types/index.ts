@@ -86,10 +86,14 @@ export interface Trade {
   lot_size: number;
   entry_price: number;
   exit_price: number | null;
-  stop_loss: number;
-  take_profit: number;
+  stop_loss: number | null;
+  take_profit: number | null;
   profit: number | null;
+  commission: number;
+  swap: number;
   strategy: string;
+  timeframe: string;
+  mt5_ticket: number | null;
   status: string;
   opened_at: string;
   closed_at: string | null;

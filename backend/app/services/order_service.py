@@ -269,20 +269,82 @@ class OrderService:
         symbol: str | None = None,
         strategy: str | None = None,
     ) -> dict:
-        trades, total = await self.trade_repo.get_trades(
-            page=page,
-            page_size=page_size,
-            symbol=symbol,
-            strategy=strategy,
-            status="closed",
-        )
+        # Try database first
+        if self.trade_repo:
+            trades, total = await self.trade_repo.get_trades(
+                page=page,
+                page_size=page_size,
+                symbol=symbol,
+                strategy=strategy,
+                status="closed",
+            )
 
-        # Convert ORM objects to Pydantic models for proper JSON serialization
-        trade_responses = [TradeResponse.model_validate(trade) for trade in trades]
+            if trades:
+                trade_responses = [TradeResponse.model_validate(trade) for trade in trades]
+                return {
+                    "trades": trade_responses,
+                    "total": total,
+                    "page": page,
+                    "page_size": page_size,
+                }
 
-        return {
-            "trades": trade_responses,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-        }
+        # Fallback: fetch directly from MT5 history
+        logger.info("No trades in DB, fetching from MT5 history")
+        try:
+            mt5_trades = await mt5_client.get_history_deals(
+                days=90,
+                symbol=symbol,
+            )
+
+            # Filter by strategy if specified (MT5 trades use comment field)
+            if strategy:
+                mt5_trades = [t for t in mt5_trades if strategy in (t.get("comment") or "")]
+
+            # Filter closed only
+            mt5_trades = [t for t in mt5_trades if t["status"] == "closed"]
+
+            total = len(mt5_trades)
+
+            # Apply pagination
+            start = (page - 1) * page_size
+            end = start + page_size
+            paginated = mt5_trades[start:end]
+
+            # Format to match frontend Trade interface
+            import uuid
+            formatted_trades = []
+            for t in paginated:
+                formatted_trades.append({
+                    "id": str(uuid.uuid4()),
+                    "symbol": t["symbol"],
+                    "direction": t["direction"],
+                    "lot_size": t["volume"],
+                    "entry_price": t["entry_price"],
+                    "exit_price": t["exit_price"],
+                    "stop_loss": t["stop_loss"],
+                    "take_profit": t["take_profit"],
+                    "profit": t["profit"],
+                    "commission": t["commission"],
+                    "swap": t["swap"],
+                    "strategy": t.get("comment") or "mt5",
+                    "timeframe": "",
+                    "mt5_ticket": t["ticket"],
+                    "status": t["status"],
+                    "opened_at": t["opened_at"],
+                    "closed_at": t["closed_at"],
+                })
+
+            return {
+                "trades": formatted_trades,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+            }
+        except Exception as e:
+            logger.error(f"Failed to fetch MT5 history: {e}")
+            return {
+                "trades": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+            }

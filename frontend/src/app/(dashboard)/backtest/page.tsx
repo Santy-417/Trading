@@ -6,7 +6,6 @@ import {
   Button,
   Card,
   CardContent,
-  TextField,
   Typography,
   Alert,
   Table,
@@ -15,6 +14,7 @@ import {
   TableRow,
   Chip,
   CircularProgress,
+  Snackbar,
 } from "@mui/material";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 import Grid from "@mui/material/Grid";
@@ -22,33 +22,63 @@ import { Play } from "lucide-react";
 import EquityChart from "@/components/charts/EquityChart";
 import api from "@/lib/api";
 import type { BacktestResult } from "@/types";
+import { formatNumberWithDots } from "@/lib/numberFormat";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 
 export default function BacktestPage() {
   const [strategy, setStrategy] = useState("fibonacci");
   const [symbol, setSymbol] = useState("EURUSD");
   const [timeframe, setTimeframe] = useState("H1");
-  const [bars, setBars] = useState(5000);
-  const [balance, setBalance] = useState(10000);
-  const [risk, setRisk] = useState(1.0);
+  const [bars, setBars] = useState("5000");
+  const [balance, setBalance] = useState("10000");
+  const [risk, setRisk] = useState("1.0");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [error, setError] = useState("");
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: "success" | "error" | "warning";
+  }>({ open: false, message: "", severity: "success" });
 
   const handleRun = async () => {
     setLoading(true);
     setError("");
+    setResult(null);
     try {
       const { data } = await api.post<BacktestResult>("/backtest/run", {
         strategy,
         symbol,
         timeframe,
-        bars,
-        initial_balance: balance,
-        risk_per_trade: risk,
+        bars: parseInt(bars) || 5000,
+        initial_balance: parseFloat(balance) || 10000,
+        risk_per_trade: parseFloat(risk) || 1.0,
       });
+
+      // Check if result has trades
+      if (data.total_trades === 0) {
+        setSnackbar({
+          open: true,
+          message: "Backtest completed but generated 0 trades. Try different parameters or a longer timeframe.",
+          severity: "warning",
+        });
+      } else {
+        setSnackbar({
+          open: true,
+          message: `Backtest completed: ${data.total_trades} trades, ${data.win_rate.toFixed(1)}% win rate`,
+          severity: "success",
+        });
+      }
+
       setResult(data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Backtest failed");
+      const errorMsg = err instanceof Error ? err.message : "Backtest failed";
+      setError(errorMsg);
+      setSnackbar({
+        open: true,
+        message: `Backtest error: ${errorMsg}. Check MT5 connection and parameters.`,
+        severity: "error",
+      });
     } finally {
       setLoading(false);
     }
@@ -90,6 +120,13 @@ export default function BacktestPage() {
                   options={[
                     { id: "EURUSD", label: "EUR/USD", description: "Euro vs US Dollar" },
                     { id: "XAUUSD", label: "XAU/USD", description: "Gold vs US Dollar" },
+                    { id: "DXY", label: "DXY", description: "US Dollar Index" },
+                    { id: "USDCAD", label: "USD/CAD", description: "US Dollar vs Canadian Dollar" },
+                    { id: "GBPUSD", label: "GBP/USD", description: "British Pound vs US Dollar" },
+                    { id: "AUDCAD", label: "AUD/CAD", description: "Australian Dollar vs Canadian Dollar" },
+                    { id: "EURJPY", label: "EUR/JPY", description: "Euro vs Japanese Yen" },
+                    { id: "USDJPY", label: "USD/JPY", description: "US Dollar vs Japanese Yen" },
+                    { id: "EURGBP", label: "EUR/GBP", description: "Euro vs British Pound" },
                   ]}
                 />
                 <SelectDropdown
@@ -104,27 +141,32 @@ export default function BacktestPage() {
                     { id: "D1", label: "D1", description: "Daily" },
                   ]}
                 />
-                <TextField
+                <FormattedNumberInput
                   size="small"
                   label="Bars"
-                  type="number"
                   value={bars}
-                  onChange={(e) => setBars(Number(e.target.value))}
+                  onChange={setBars}
+                  decimals={0}
+                  helperText="Number of historical candles to backtest"
+                  fullWidth
                 />
-                <TextField
+                <FormattedNumberInput
                   size="small"
                   label="Initial Balance ($)"
-                  type="number"
                   value={balance}
-                  onChange={(e) => setBalance(Number(e.target.value))}
+                  onChange={setBalance}
+                  decimals={2}
+                  helperText="Starting account balance"
+                  fullWidth
                 />
-                <TextField
+                <FormattedNumberInput
                   size="small"
                   label="Risk per Trade (%)"
-                  type="number"
                   value={risk}
-                  onChange={(e) => setRisk(Number(e.target.value))}
-                  inputProps={{ step: 0.5, min: 0.1, max: 10 }}
+                  onChange={setRisk}
+                  decimals={1}
+                  helperText="Risk percentage per trade (0.1 - 10)"
+                  fullWidth
                 />
                 <Button
                   variant="contained"
@@ -160,7 +202,7 @@ export default function BacktestPage() {
                         <TableBody>
                           <TableRow><TableCell>Total Trades</TableCell><TableCell align="right"><strong>{result.total_trades}</strong></TableCell></TableRow>
                           <TableRow><TableCell>Win Rate</TableCell><TableCell align="right"><strong>{result.win_rate.toFixed(1)}%</strong></TableCell></TableRow>
-                          <TableRow><TableCell>Net Profit</TableCell><TableCell align="right" sx={{ color: result.net_profit >= 0 ? "success.main" : "error.main" }}><strong>${result.net_profit.toFixed(2)}</strong></TableCell></TableRow>
+                          <TableRow><TableCell>Net Profit</TableCell><TableCell align="right" sx={{ color: result.net_profit >= 0 ? "success.main" : "error.main" }}><strong>${formatNumberWithDots(result.net_profit, 2)}</strong></TableCell></TableRow>
                           <TableRow><TableCell>Profit Factor</TableCell><TableCell align="right"><strong>{result.profit_factor.toFixed(2)}</strong></TableCell></TableRow>
                           <TableRow><TableCell>Sharpe Ratio</TableCell><TableCell align="right"><strong>{result.sharpe_ratio.toFixed(2)}</strong></TableCell></TableRow>
                           <TableRow><TableCell>Max Drawdown</TableCell><TableCell align="right"><strong>{(result.max_drawdown_percent ?? 0).toFixed(2)}%</strong></TableCell></TableRow>
@@ -171,8 +213,8 @@ export default function BacktestPage() {
                       <Table size="small">
                         <TableBody>
                           <TableRow><TableCell>Return</TableCell><TableCell align="right"><strong>{result.return_percent.toFixed(2)}%</strong></TableCell></TableRow>
-                          <TableRow><TableCell>Avg Win</TableCell><TableCell align="right" sx={{ color: "success.main" }}>${(result.average_win ?? 0).toFixed(2)}</TableCell></TableRow>
-                          <TableRow><TableCell>Avg Loss</TableCell><TableCell align="right" sx={{ color: "error.main" }}>${(result.average_loss ?? 0).toFixed(2)}</TableCell></TableRow>
+                          <TableRow><TableCell>Avg Win</TableCell><TableCell align="right" sx={{ color: "success.main" }}>${formatNumberWithDots(result.average_win ?? 0, 2)}</TableCell></TableRow>
+                          <TableRow><TableCell>Avg Loss</TableCell><TableCell align="right" sx={{ color: "error.main" }}>${formatNumberWithDots(Math.abs(result.average_loss ?? 0), 2)}</TableCell></TableRow>
                           <TableRow><TableCell>Max Consecutive Wins</TableCell><TableCell align="right">{result.max_consecutive_wins}</TableCell></TableRow>
                           <TableRow><TableCell>Max Consecutive Losses</TableCell><TableCell align="right">{result.max_consecutive_losses}</TableCell></TableRow>
                           <TableRow><TableCell>Expectancy</TableCell><TableCell align="right"><strong>${result.expectancy.toFixed(2)}</strong></TableCell></TableRow>
@@ -195,6 +237,21 @@ export default function BacktestPage() {
           )}
         </Grid>
       </Grid>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          severity={snackbar.severity}
+          onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+          variant="filled"
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

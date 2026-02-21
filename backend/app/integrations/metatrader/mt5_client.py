@@ -629,6 +629,119 @@ class MT5Client:
 
         return await asyncio.to_thread(_get)
 
+    async def get_history_deals(
+        self,
+        days: int = 30,
+        symbol: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get closed trade history from MT5 grouped by position.
+
+        Uses mt5.history_deals_get() to fetch deals, then groups
+        entry (DEAL_ENTRY_IN) and exit (DEAL_ENTRY_OUT) deals by
+        position_id to reconstruct complete trades.
+        """
+        self._ensure_initialized()
+        from datetime import timedelta, timezone
+
+        def _get():
+            date_to = datetime.now(timezone.utc)
+            date_from = date_to - timedelta(days=days)
+
+            if symbol:
+                deals = mt5.history_deals_get(date_from, date_to, symbol=symbol)
+            else:
+                deals = mt5.history_deals_get(date_from, date_to)
+
+            if deals is None or len(deals) == 0:
+                logger.info("No history deals found in MT5")
+                return []
+
+            logger.info(f"MT5 returned {len(deals)} history deals")
+
+            # Group deals by position_id
+            positions: dict[int, dict[str, Any]] = {}
+            for deal in deals:
+                pos_id = deal.position_id
+                if pos_id == 0:
+                    continue  # Skip balance/deposit operations
+
+                if pos_id not in positions:
+                    positions[pos_id] = {
+                        "position_id": pos_id,
+                        "symbol": deal.symbol,
+                        "entries": [],
+                        "exits": [],
+                        "total_profit": 0.0,
+                        "total_commission": 0.0,
+                        "total_swap": 0.0,
+                    }
+
+                entry = {
+                    "ticket": deal.ticket,
+                    "order": deal.order,
+                    "time": datetime.fromtimestamp(deal.time, tz=timezone.utc).isoformat(),
+                    "type": deal.type,
+                    "entry": deal.entry,
+                    "volume": deal.volume,
+                    "price": deal.price,
+                    "profit": deal.profit,
+                    "commission": deal.commission,
+                    "swap": deal.swap,
+                    "comment": deal.comment,
+                }
+
+                # DEAL_ENTRY_IN = 0 (open), DEAL_ENTRY_OUT = 1 (close)
+                if deal.entry == 0:
+                    positions[pos_id]["entries"].append(entry)
+                elif deal.entry == 1:
+                    positions[pos_id]["exits"].append(entry)
+
+                positions[pos_id]["total_profit"] += deal.profit
+                positions[pos_id]["total_commission"] += deal.commission
+                positions[pos_id]["total_swap"] += deal.swap
+
+            # Build trade list from grouped positions
+            trades = []
+            for pos_id, pos_data in positions.items():
+                if not pos_data["entries"]:
+                    continue
+
+                entry_deal = pos_data["entries"][0]
+                exit_deal = pos_data["exits"][0] if pos_data["exits"] else None
+
+                # Determine direction from deal type
+                # ORDER_TYPE_BUY = 0, ORDER_TYPE_SELL = 1
+                direction = "BUY" if entry_deal["type"] == 0 else "SELL"
+                is_closed = exit_deal is not None
+
+                trade = {
+                    "ticket": entry_deal["order"],
+                    "position_id": pos_id,
+                    "symbol": pos_data["symbol"],
+                    "direction": direction,
+                    "volume": entry_deal["volume"],
+                    "entry_price": entry_deal["price"],
+                    "exit_price": exit_deal["price"] if exit_deal else None,
+                    "stop_loss": None,
+                    "take_profit": None,
+                    "profit": round(pos_data["total_profit"], 2),
+                    "commission": round(pos_data["total_commission"], 2),
+                    "swap": round(pos_data["total_swap"], 2),
+                    "opened_at": entry_deal["time"],
+                    "closed_at": exit_deal["time"] if exit_deal else None,
+                    "status": "closed" if is_closed else "open",
+                    "comment": entry_deal["comment"],
+                }
+                trades.append(trade)
+
+            # Sort by opened_at descending (newest first)
+            trades.sort(key=lambda t: t["opened_at"], reverse=True)
+            return trades
+
+        result = await asyncio.to_thread(_get)
+        logger.info(f"get_history_deals returning {len(result)} trades")
+        return result
+
 
 # Singleton instance
 mt5_client = MT5Client()

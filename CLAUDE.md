@@ -16,8 +16,8 @@ Monolithic modular system with Clean Architecture + SOLID. 3 phases (all complet
 ## Tech Stack
 
 - **Backend:** Python 3.11+, FastAPI, SQLAlchemy 2.0 (async), Supabase (PostgreSQL), Redis, Celery
-- **Frontend:** Next.js 14, TypeScript, Material UI v7, Zustand, Recharts, TradingView widget
-- **Trading:** MetaTrader5 Python package, XAUUSD + EURUSD
+- **Frontend:** Next.js 14, TypeScript, Material UI v7, Zustand, Recharts, TradingView widget, lucide-react icons, Framer Motion
+- **Trading:** MetaTrader5 Python package, 9 pairs (EURUSD, XAUUSD, DXY, USDCAD, GBPUSD, AUDCAD, EURJPY, USDJPY, EURGBP)
 - **ML:** XGBoost + scikit-learn, walk-forward validation, feature engineering (RSI, MACD, BB, ATR, EMA, momentum)
 - **AI Analysis:** OpenAI GPT-4o-mini (abstraction for future Claude/Local support)
 - **Auth:** Supabase JWT verification, RBAC (admin only)
@@ -162,11 +162,18 @@ frontend/src/
 │   ├── layout/                # Sidebar, Header, AppShell
 │   ├── charts/                # TradingViewWidget, EquityChart (Recharts)
 │   ├── trading/               # BotControl, PositionsTable
-│   └── common/                # StatCard, LoadingSpinner
+│   ├── common/                # StatCard, LoadingSpinner
+│   └── ui/                    # Radix UI primitives (21st.dev style)
+│       ├── select-dropdown.tsx
+│       ├── order-type-select.tsx
+│       ├── popover.tsx
+│       ├── button.tsx
+│       └── avatar.tsx
 ├── lib/
-│   ├── api.ts                 # Axios instance + JWT interceptor
+│   ├── api.ts                 # Axios instance + JWT interceptor + dev auth bypass
 │   ├── supabase.ts            # Supabase client
-│   └── theme.ts               # MUI dark theme configuration
+│   ├── theme.ts               # MUI dark theme configuration
+│   └── utils.ts               # cn() utility for Tailwind class merging
 ├── store/index.ts             # Zustand store (bot status, positions, metrics)
 └── types/index.ts             # TypeScript interfaces for all API types
 ```
@@ -181,6 +188,15 @@ backend/tests/
 ├── test_backtesting.py      # Metrics, simulator, backtest engine
 └── test_ml.py               # Feature engineering, dataset builder, model trainer
 ```
+
+## Number Formatting
+
+European format (dots as thousand separators):
+- `formatNumberWithDots(5000, 0)` → "5.000"
+- `formatNumberWithDots(2575.50, 2)` → "2.575,50"
+- `parseFormattedNumber("5.000")` → 5000
+- Applied to: BacktestPage results display (net profit, avg win, avg loss)
+- Utility location: `frontend/src/lib/numberFormat.ts`
 
 ## API Endpoints
 
@@ -225,3 +241,9 @@ backend/tests/
 - Standard Python logging (not structlog/JSON)
 - Swagger docs available at `/docs`
 - Frontend uses MUI v7 Grid with `size={{ xs, md }}` syntax (not `item` prop)
+- Frontend uses lucide-react icons (NOT @mui/icons-material)
+- Sidebar is collapsible (240px ↔ 64px) via bottom toggle button
+- Dark mode via CSS variables in globals.css (Tailwind dark: class)
+- Development mode bypasses auth (NODE_ENV=development uses dev-bypass-token)
+- Backtest inputs use text type with regex validation (no browser spinners)
+- Audit logs require closed trades (close positions or run sync script)
