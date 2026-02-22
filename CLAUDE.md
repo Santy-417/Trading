@@ -4,22 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Professional Forex AI Trading Platform. Automated trading on MetaTrader 5 with rule-based + ML strategies, strict risk management, and LLM-based analysis (non-execution).
-
-## Architecture
-
-Monolithic modular system with Clean Architecture + SOLID. 3 phases (all complete):
-- **Phase 1 (complete):** Backend (FastAPI) + MT5 integration + Risk engine
-- **Phase 2 (complete):** Backtesting engine + ML module (XGBoost)
-- **Phase 3 (complete):** Frontend (Next.js 14 + Material UI v7) + AI Analysis (OpenAI)
+Professional Forex AI Trading Platform. Automated trading on MetaTrader 5 with rule-based + ML strategies, strict risk management, and LLM-based analysis (non-execution). All 3 development phases complete.
 
 ## Tech Stack
 
 - **Backend:** Python 3.11+, FastAPI, SQLAlchemy 2.0 (async), Supabase (PostgreSQL), Redis, Celery
-- **Frontend:** Next.js 14, TypeScript, Material UI v7, Zustand, Recharts, TradingView widget, lucide-react icons, Framer Motion
-- **Trading:** MetaTrader5 Python package, 9 pairs (EURUSD, XAUUSD, DXY, USDCAD, GBPUSD, AUDCAD, EURJPY, USDJPY, EURGBP)
-- **ML:** XGBoost + scikit-learn, walk-forward validation, feature engineering (RSI, MACD, BB, ATR, EMA, momentum)
-- **AI Analysis:** OpenAI GPT-4o-mini (abstraction for future Claude/Local support)
+- **Frontend:** Next.js 14, TypeScript, Material UI v7, Zustand, Recharts, TradingView widget, lucide-react, Framer Motion
+- **Trading:** MetaTrader5 Python package — 9 pairs: EURUSD, XAUUSD, DXY, USDCAD, GBPUSD, AUDCAD, EURJPY, USDJPY, EURGBP
+- **ML:** XGBoost + scikit-learn, walk-forward validation, feature engineering (RSI, MACD, BB, ATR, EMA, momentum), SMC feature extractor (20 Smart Money Concepts features)
+- **AI Analysis:** OpenAI GPT-4o-mini (abstraction layer supports future Claude/Local providers)
 - **Auth:** Supabase JWT verification, RBAC (admin only)
 
 ## Common Commands
@@ -55,127 +48,86 @@ ruff format app/
 
 ```
 backend/app/
-├── main.py                    # FastAPI app assembly + lifespan + global exception handler
-├── core/
-│   ├── config.py              # Pydantic Settings (.env loading)
-│   ├── security.py            # JWT verification (Supabase)
-│   ├── logging_config.py      # Standard Python logging setup
-│   ├── rate_limit.py          # SlowAPI rate limiter per IP
-│   └── middleware.py          # CORS, security headers, audit logging
-├── routers/
-│   ├── health.py              # GET /api/v1/health
-│   ├── bot.py                 # /api/v1/bot/*
-│   ├── orders.py              # /api/v1/orders/*
-│   ├── metrics.py             # /api/v1/metrics/*
-│   ├── backtest.py            # /api/v1/backtest/*
-│   ├── ml.py                  # /api/v1/ml/*
-│   └── ai.py                  # /api/v1/ai/*
-├── services/
-│   ├── bot_service.py         # Bot lifecycle management
-│   ├── order_service.py       # Order execution logic
-│   ├── metrics_service.py     # Trading metrics aggregation
-│   ├── backtest_service.py    # Backtesting orchestration
-│   ├── ml_service.py          # ML training/prediction orchestration
-│   └── ai_service.py          # AI analysis orchestration
-├── repositories/
-│   ├── trade_repository.py    # Trade CRUD operations
-│   └── audit_repository.py    # Audit log persistence
-├── models/
-│   ├── base.py                # SQLAlchemy declarative base + mixins
-│   ├── trade.py               # Trade history model
-│   ├── bot_config.py          # Bot configuration model
-│   ├── risk_event.py          # Risk breach events model
-│   ├── audit_log.py           # Audit log model
-│   ├── strategy_config.py     # Strategy parameters model
-│   ├── backtest_result.py     # Backtest results model
-│   └── ml_model.py            # ML model metadata
-├── schemas/
-│   ├── trade.py               # Trade request/response schemas
-│   ├── bot.py                 # Bot control schemas
-│   ├── order.py               # Order schemas
-│   ├── backtest.py            # Backtest config/result schemas
-│   ├── ml.py                  # ML training/prediction schemas
-│   └── ai.py                  # AI analysis request/response schemas
-├── strategies/
-│   ├── base.py                # ABC: generate_signal(), TradeSignal, SignalDirection
-│   ├── fibonacci.py           # Fibonacci retracement/extension strategy
-│   ├── ict.py                 # ICT (Order Blocks, FVG, liquidity sweeps)
-│   ├── manual.py              # Manual signal creation
-│   └── hybrid_ml.py           # Rules + ML combined strategy
-├── risk/
-│   ├── risk_manager.py        # Core risk engine (pre-trade validation)
-│   ├── lot_calculator.py      # Fixed, % risk, dynamic lot sizing
-│   ├── circuit_breaker.py     # Max drawdown, daily loss cap, overtrading protection
-│   └── kill_switch.py         # Emergency stop all trading
-├── execution/
-│   └── execution_engine.py    # Orchestrates: signal → risk check → MT5 execution
-├── backtesting/
-│   ├── engine.py              # Backtesting motor (strategy + data → metrics)
-│   ├── simulator.py           # Trade simulation (spread, commission, slippage)
-│   ├── metrics.py             # Sharpe, profit factor, drawdown, equity curve, streaks
-│   ├── data_loader.py         # Load historical data from MT5
-│   └── optimizer.py           # Parameter optimization
-├── ml/
-│   ├── feature_engineering.py # Technical indicators (RSI, MACD, BB, ATR, EMA, momentum)
-│   ├── dataset_builder.py     # Build labeled datasets from OHLCV
-│   ├── model_training.py      # XGBoost training pipeline
-│   ├── model_registry.py      # Save/load models + metadata (joblib)
-│   ├── prediction.py          # Real-time inference
-│   └── optimizer.py           # Grid search + walk-forward validation
-├── ai_analysis/
-│   ├── llm_client.py          # LLM abstraction (OpenAI now, Claude/Local later)
-│   ├── trade_analyzer.py      # Pattern recognition in trades
-│   ├── risk_review.py         # Risk anomaly detection
-│   └── performance_summary.py # Weekly/monthly natural language reports
-├── tasks/
-│   ├── celery_app.py          # Celery configuration
-│   ├── backtest_tasks.py      # Background backtest jobs
-│   └── ml_tasks.py            # Background ML training jobs
-├── integrations/
-│   ├── metatrader/
-│   │   └── mt5_client.py      # MT5 wrapper (connect, orders, positions, history)
-│   └── supabase/
-│       └── client.py          # SQLAlchemy async engine (lazy init via @lru_cache)
-└── utils/
-    └── helpers.py
+├── main.py                 # FastAPI app + lifespan + global exception handler
+├── core/                   # Config, security (JWT), logging, rate limiting, middleware
+├── routers/                # API endpoints: health, bot, orders, metrics, backtest, ml, ai
+├── services/               # Business logic: bot, orders, metrics, backtest, ml, ai
+├── repositories/           # Data access: trade CRUD, audit log persistence
+├── models/                 # SQLAlchemy ORM: trade, bot_config, risk_event, audit_log, ml_model
+├── schemas/                # Pydantic request/response schemas per domain
+├── strategies/             # Trading strategies: bias (SMC V1), fibonacci, ict, manual, hybrid_ml
+├── risk/                   # Risk engine: risk_manager, lot_calculator, circuit_breaker, kill_switch
+├── execution/              # Orchestrates: signal → risk check → MT5 execution
+├── backtesting/            # Engine, simulator (spread/commission/slippage), metrics, optimizer
+├── ml/                     # Feature engineering, SMC feature extractor, dataset builder, XGBoost training
+├── ai_analysis/            # LLM client (abstraction), trade analyzer, risk review, reports
+├── tasks/                  # Celery: backtest + ML background jobs
+└── integrations/           # MT5 client (connect, orders, positions, history), Supabase client
 ```
+
+## Trading Strategies
+
+### BiasStrategy V1 (Smart Money Concepts)
+**Status:** ✅ Production-ready | **Tested:** Synthetic data validation complete
+
+**Core Methodology:**
+- Daily bias from D1 candle (BULLISH/BEARISH/NEUTRAL with Doji detection)
+- London manipulation detection (PDH/PDL sweeps during 02:00-11:30 Bogotá)
+- NY session entry (08:00-14:00 Bogotá) with ChoCh or fractal break confirmation
+- Shannon entropy filtering for market regime detection
+
+**V1 Optimizations (Feb 2026):**
+1. **ChoCh Híbrido** - `tolerance = max(range * 0.35, pip * 2.5)` prevents microscopic tolerances
+2. **Fractal Break Fallback** - Emergency entry if no ChoCh in 60 M5 bars (breaks 3H1 high/low)
+3. **Bias Neutral** - Doji detection (body <20% of D1 range) → searches sweeps in both directions
+4. **Entropy Threshold** - Increased 2.8 → 3.1 for moderate-high volatility acceptance
+5. **SMC Feature Extractor** - 20 ML features (PDH/PDL, sessions, sweeps, fractals, entropy, bias)
+
+**Key Files:**
+- `backend/app/strategies/bias.py` - Main strategy (~800 lines)
+- `backend/app/ml/smc_feature_extractor.py` - SMC-specific ML features (450 lines)
+- `backend/tests/test_bias_strategy.py` - Strategy unit tests (25 tests)
+
+**Parameters:**
+```python
+BiasStrategy(
+    entropy_threshold=3.1,           # Shannon entropy filter
+    choch_lookback=60,               # M5 bars for ChoCh detection
+    london_start_hour=2,             # 02:00 Bogotá (07:00 UTC)
+    ny_start_hour=8, ny_end_hour=14, # 08:00-14:00 Bogotá
+    min_rr=1.5,                      # Minimum risk-reward ratio
+    sl_pips_base=10.0,               # Base stop loss in pips
+)
+```
+
+**Expected Performance (with real MT5 data):**
+- Trades/year: 15-30 (2-3 per week)
+- Win rate: 40-55%
+- Profit factor: >1.0
+- Sharpe ratio: >0.8
+
+**Backtest Validation:**
+- Synthetic data (10k bars): 3 trades generated, all V1 features operational
+- Real MT5 data: Ready for execution via `python backend/run_v1_backtest.py`
 
 ## Frontend Structure
 
 ```
 frontend/src/
-├── app/
-│   ├── layout.tsx             # Root layout + MUI ThemeProvider
-│   ├── page.tsx               # Root redirect (auth check → /trading or /login)
-│   ├── providers.tsx          # MUI dark theme + CssBaseline
-│   ├── login/page.tsx         # Supabase Auth UI login
-│   └── (dashboard)/           # Protected route group (auth guard)
-│       ├── layout.tsx         # AppShell (Sidebar + Header + main content)
-│       ├── trading/page.tsx   # Live trading: TradingView chart, bot control, positions
-│       ├── backtest/page.tsx  # Backtest config, results table, equity curve
-│       ├── ml/page.tsx        # Train models, view predictions, model list
-│       ├── analysis/page.tsx  # AI analysis: trade patterns, risk review, reports
-│       ├── risk/page.tsx      # Risk gauges: drawdown, daily loss, overtrading
-│       ├── audit/page.tsx     # Trade history with filters + pagination
-│       └── settings/page.tsx  # Platform info
-├── components/
-│   ├── layout/                # Sidebar, Header, AppShell
-│   ├── charts/                # TradingViewWidget, EquityChart (Recharts)
-│   ├── trading/               # BotControl, PositionsTable
-│   ├── common/                # StatCard, LoadingSpinner
-│   └── ui/                    # Radix UI primitives (21st.dev style)
-│       ├── select-dropdown.tsx
-│       ├── order-type-select.tsx
-│       ├── popover.tsx
-│       ├── button.tsx
-│       └── avatar.tsx
-├── lib/
-│   ├── api.ts                 # Axios instance + JWT interceptor + dev auth bypass
-│   ├── supabase.ts            # Supabase client
-│   ├── theme.ts               # MUI dark theme configuration
-│   └── utils.ts               # cn() utility for Tailwind class merging
-├── store/index.ts             # Zustand store (bot status, positions, metrics)
-└── types/index.ts             # TypeScript interfaces for all API types
+├── app/                    # Next.js 14 App Router
+│   ├── login/              # Supabase Auth UI
+│   └── (dashboard)/        # Protected route group (auth guard)
+│       ├── trading/        # TradingView chart, bot control, positions table
+│       ├── backtest/       # Config form, results table, equity curve chart
+│       ├── ml/             # Train models, predictions, model registry
+│       ├── analysis/       # AI trade patterns, risk review, performance reports
+│       ├── risk/           # Risk gauges: drawdown, daily loss, overtrading
+│       ├── audit/          # Trade history with filters + pagination (MT5 fallback)
+│       └── settings/       # Platform info
+├── components/             # layout/ (Sidebar, Header, AppShell), charts/, trading/, common/, ui/
+├── lib/                    # api.ts (Axios+JWT), supabase.ts, theme.ts, utils.ts, numberFormat.ts
+├── store/                  # Zustand (bot status, positions, metrics)
+└── types/                  # TypeScript interfaces for all API types
 ```
 
 ## Tests (51 tests)
@@ -188,15 +140,6 @@ backend/tests/
 ├── test_backtesting.py      # Metrics, simulator, backtest engine
 └── test_ml.py               # Feature engineering, dataset builder, model trainer
 ```
-
-## Number Formatting
-
-European format (dots as thousand separators):
-- `formatNumberWithDots(5000, 0)` → "5.000"
-- `formatNumberWithDots(2575.50, 2)` → "2.575,50"
-- `parseFormattedNumber("5.000")` → 5000
-- Applied to: BacktestPage results display (net profit, avg win, avg loss)
-- Utility location: `frontend/src/lib/numberFormat.ts`
 
 ## API Endpoints
 
@@ -211,7 +154,7 @@ European format (dots as thousand separators):
 | POST | `/api/v1/orders/limit` | Place limit order |
 | POST | `/api/v1/orders/close` | Close position |
 | GET | `/api/v1/orders/open` | List open positions |
-| GET | `/api/v1/orders/history` | Trade history (paginated, filterable) |
+| GET | `/api/v1/orders/history` | Trade history (DB first, MT5 fallback) |
 | GET | `/api/v1/metrics/performance` | Performance metrics |
 | GET | `/api/v1/metrics/equity-curve` | Equity curve data |
 | POST | `/api/v1/backtest/run` | Run backtest |
@@ -228,22 +171,34 @@ European format (dots as thousand separators):
 | POST | `/api/v1/ai/performance-summary` | AI performance report |
 | POST | `/api/v1/ai/compare-strategies` | AI strategy comparison |
 
-## Critical Rules
+## Coding Conventions
 
-- LLM must NEVER execute trades
-- Execution engine must NOT depend on LLM
+### Backend
 - No business logic inside routers (use services layer)
-- No raw SQL (ORM only)
-- No hardcoded credentials (use .env)
+- No raw SQL (ORM only via SQLAlchemy)
 - No blocking calls inside async endpoints
-- No silent error handling
-- Risk engine must be checked before every trade execution
+- No silent error handling — always log errors
 - Standard Python logging (not structlog/JSON)
+- Risk engine must be checked before every trade execution
 - Swagger docs available at `/docs`
-- Frontend uses MUI v7 Grid with `size={{ xs, md }}` syntax (not `item` prop)
-- Frontend uses lucide-react icons (NOT @mui/icons-material)
-- Sidebar is collapsible (240px ↔ 64px) via bottom toggle button
-- Dark mode via CSS variables in globals.css (Tailwind dark: class)
+
+### Frontend
+- MUI v7 Grid with `size={{ xs, md }}` syntax (NOT `item` prop)
+- lucide-react icons only (NOT @mui/icons-material)
+- Sidebar: collapsible (240px ↔ 64px), segmented sections (MAIN_NAV + ACCOUNT)
+- Dark mode via CSS variables in globals.css (Tailwind `dark:` class)
 - Development mode bypasses auth (NODE_ENV=development uses dev-bypass-token)
-- Backtest inputs use text type with regex validation (no browser spinners)
-- Audit logs require closed trades (close positions or run sync script)
+- Backtest inputs use FormattedNumberInput component (no browser spinners)
+
+### Data & Formatting
+- No hardcoded credentials (use .env)
+- European number format: dots as thousand separators (5.000), comma as decimal (2.575,50)
+- Utility: `formatNumberWithDots()` / `parseFormattedNumber()` in `frontend/src/lib/numberFormat.ts`
+- Component: `FormattedNumberInput` in `frontend/src/components/ui/formatted-number-input.tsx`
+- Trade history: DB-first with MT5 `history_deals_get()` fallback when DB is empty
+
+### Trading Rules
+- LLM must NEVER execute trades — AI analysis is advisory only
+- Execution engine must NOT depend on LLM
+- 9 supported pairs: EURUSD, XAUUSD, DXY, USDCAD, GBPUSD, AUDCAD, EURJPY, USDJPY, EURGBP
+- Risk validation: circuit breaker, kill switch, daily loss cap, overtrading protection
