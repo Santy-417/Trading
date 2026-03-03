@@ -3,7 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_current_user
 from app.integrations.supabase.client import get_db
-from app.schemas.backtest import BacktestRequest, BacktestResponse, OptimizeRequest
+from app.schemas.backtest import (
+    BacktestEstimateRequest,
+    BacktestRequest,
+    BacktestResponse,
+    OptimizeRequest,
+)
 from app.services.backtest_service import BacktestService
 
 router = APIRouter(prefix="/backtest", tags=["Backtesting"])
@@ -17,6 +22,15 @@ async def run_backtest(
 ):
     service = BacktestService(db)
     return await service.run_backtest(body)
+
+
+@router.post("/estimate")
+async def estimate_bars(
+    body: BacktestEstimateRequest,
+    _user: dict = Depends(get_current_user),
+):
+    """Estimate the number of bars for a given date range."""
+    return BacktestService.estimate_bars(body)
 
 
 @router.post("/optimize")

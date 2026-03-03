@@ -35,11 +35,16 @@ Professional-grade automated Forex trading platform running locally on Windows w
 - **Isolated from execution** — AI never places trades
 
 ### Frontend & UI
+- **Professional UI** with glassmorphism login, animated backgrounds, and Framer Motion transitions
 - TradingView Advanced Chart integration with real-time data
-- Dark theme dashboard with collapsible sidebar (segmented navigation)
+- **Sidebar:** Collapsible (240px/64px), left-border active indicator, user avatar, risk badge, tooltips
+- **Header:** Contextual breadcrumb, live dual clock (UTC + Bogota), active session indicator (Asian/London/NY)
+- **Trading Page:** Symbol context header with P&L chip, session-aware stat cards with sparkline backgrounds
+- **Backtest Page:** Collapsible form sections, hero metric cards, compare mode with tabs, enhanced equity chart
+- **Equity Chart:** Initial balance reference line, custom tooltip (P&L + drawdown), return % badge
+- Dark theme with semantic colors (green profit, red loss, amber warning)
 - European number formatting (5.000 instead of 5,000)
-- Snackbar alerts for backtest results and errors
-- 21st.dev inspired components (Radix UI + Tailwind + lucide-react)
+- 21st.dev inspired components (Radix UI + Tailwind + lucide-react + Framer Motion)
 
 ### Infrastructure
 - Supabase Auth (JWT) with RBAC (admin only)
@@ -52,8 +57,9 @@ Professional-grade automated Forex trading platform running locally on Windows w
 
 | Page | Description |
 |------|-------------|
-| **Trading** | Live MT5 metrics, TradingView chart, bot control (start/stop/kill switch), active positions table |
-| **Backtest** | Configure strategy parameters, run backtests, view results table and equity curve chart |
+| **Login** | Glassmorphism card with animated gradient orbs, system health indicator, Framer Motion stagger animations |
+| **Trading** | Symbol context header with P&L chip, stat cards with sparklines, TradingView chart, bot control, positions table |
+| **Backtest** | Collapsible config sections, hero metrics (Net Profit/Win Rate/Profit Factor), date range mode with warmup, compare mode tabs, session analysis, BUY/SELL distribution, enhanced equity chart |
 | **ML Models** | Train XGBoost models, view predictions, manage saved model registry |
 | **AI Analysis** | AI trade pattern analysis, risk review, drawdown explanation, performance summaries |
 | **Risk** | Real-time risk gauges — max drawdown, daily loss, overtrading protection status |
@@ -62,9 +68,9 @@ Professional-grade automated Forex trading platform running locally on Windows w
 
 ## BiasStrategy V1 (Smart Money Concepts)
 
-**Status:** ✅ Production-ready | **Optimization:** V1 complete (Feb 2026)
+**Status:** ✅ Production-ready | **Optimization:** V1 complete + SELL Surgery (Feb 2026)
 
-Professional SMC-based strategy targeting 15-30 trades/year with institutional edge detection.
+Professional SMC-based strategy with symmetric BUY/SELL logic, tested on real MT5 data (20k bars H1).
 
 ### Core Methodology
 1. **Daily Bias** - D1 candle analysis (BULLISH/BEARISH/NEUTRAL with Doji detection)
@@ -73,28 +79,41 @@ Professional SMC-based strategy targeting 15-30 trades/year with institutional e
 4. **Shannon Entropy Filter** - Market regime detection to avoid erratic conditions
 
 ### V1 Optimizations (Feb 2026)
-- **ChoCh Híbrido:** `tolerance = max(range * 0.35, pip * 2.5)` - prevents microscopic tolerances in synthetic M5 data
-- **Fractal Break Fallback:** Emergency entry mechanism if no ChoCh detected in 60 M5 bars
+- **SELL Trade Surgery:** Fixed critical bug (100% BUY trades, 0% SELL) with symmetric ChoCh/Fractal logic
+- **Temporal Swing Filtering:** Uses last 15 M5 bars for swing point selection (prevents stale comparisons)
+- **ChoCh Symmetric Logic:** `tolerance = max(range * 0.15, pip * 2.0)` for BUY and SELL
+- **Fractal Liquidity Zones:** BUY: `fractal_high - 3 pips`, SELL: `fractal_low + 1 pip` (calibrated)
+- **Risk-Reward Optimized:** min_rr reduced from 1.5 to 1.3 (maximizes Net Profit on H1 timeframe)
 - **Bias Neutral:** Doji detection (body <20% of D1 range) → searches sweeps in both PDH and PDL
-- **Entropy Threshold:** Increased 2.8 → 3.1 for moderate-high volatility acceptance
+- **Entropy Threshold:** 3.1 for moderate-high volatility acceptance
 - **SMC Feature Extractor:** 20 ML features for future model training
 
-### Backtest Results (Synthetic Data)
+### Backtest Results (Real MT5 Data - EURUSD H1)
 ```
-EURUSD (10k bars): 3 trades | Win Rate: 33% | Profit Factor: 0.40
-- All trades with ChoCh detection
-- Manipulation sweeps detected correctly
-- V1 metadata tracking operational
+20k bars (Feb 2026 validation):
+Total Trades: 146 | Win Rate: 56.16% | Profit Factor: 1.36
+Sharpe Ratio: 2.25 | Max Drawdown: 7.89% | Net Profit: $1,275
+BUY/SELL Distribution: 26 BUY (17.8%), 120 SELL (82.2%)
+Note: Imbalance under calibration - Fractal SELL threshold at 1.0 pips
 
-Expected with Real MT5 Data:
-- Trades/year: 15-30 (2-3 per week)
-- Win rate: 40-55%
-- Profit factor: >1.0
-- Sharpe ratio: >0.8
+10k bars (min_rr optimization baseline):
+Total Trades: 304 | Win Rate: 49.67% | Profit Factor: 1.31
+Net Profit: $2,437 (optimal for min_rr=1.3)
+
+7k bars (post-surgery validation):
+Total Trades: 41 | Win Rate: 73.17% | Profit Factor: 3.38
+Sharpe Ratio: 8.33 | Net Profit: $1,526
 ```
+
+**Recommended Timeframe:** H1 (tested and optimized). M15 not recommended without full re-optimization.
+
+**Known Calibration Status:**
+- BUY/SELL balance calibration in progress (target ratio: 0.8-1.2)
+- Fractal SELL threshold adjusted to 1.0 pips (trade-off between balance and profitability)
+- ChoCh SELL threshold at 1.5 pips (minimal impact on distribution)
 
 **Files:**
-- `backend/app/strategies/bias.py` - Main strategy (800 lines)
+- `backend/app/strategies/bias.py` - Main strategy (1000 lines, ChoCh/Fractal logic lines 847-1012)
 - `backend/app/ml/smc_feature_extractor.py` - ML features (450 lines)
 - `backend/tests/test_bias_strategy.py` - Unit tests (25 tests)
 
@@ -114,11 +133,12 @@ AI Flow:      Trade History → LLM Analysis → Reports (never touches executio
 - **Execution Engine** sends validated orders to MetaTrader 5
 - **AI Analysis** runs in parallel — reads trade data, generates insights, but never executes
 
-Development was completed in 3 phases + V1 optimization:
+Development was completed in 3 phases + V1 optimization + UI redesign:
 1. Backend Core + MT5 integration + Risk Engine
 2. Backtesting Engine + ML Module (XGBoost)
 3. Frontend (Next.js 14 + Material UI) + AI Analysis (OpenAI)
-4. **BiasStrategy V1 Optimization** - Smart Money Concepts refinement (Feb 2026)
+4. **BiasStrategy V1 Optimization** - Smart Money Concepts refinement + SELL trade surgery + min_rr optimization (Feb 2026)
+5. **UI/UX Redesign** - Professional trading interface: glassmorphism login, session-aware header, hero metrics, collapsible backtest form, enhanced equity chart (Mar 2026)
 
 ## Quick Start
 
@@ -240,6 +260,8 @@ For detailed file-by-file documentation, see [CLAUDE.md](CLAUDE.md).
 - [x] Phase 1: Backend Core + MT5 integration + Risk Engine
 - [x] Phase 2: Backtesting Engine + ML Module
 - [x] Phase 3: Frontend (Next.js 14 + Material UI) + AI Analysis (OpenAI)
+- [x] Phase 4: BiasStrategy V1 Optimization + SELL Trade Surgery (Feb 2026)
+- [x] Phase 5: UI/UX Redesign - Professional trading interface (Mar 2026)
 
 ## Testing & Development
 

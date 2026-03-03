@@ -105,9 +105,65 @@ export interface BacktestRequest {
   symbol: string;
   timeframe: string;
   bars?: number;
+  date_from?: string;
+  date_to?: string;
+  timezone?: string;
+  warmup_bars?: number;
   initial_balance?: number;
   risk_per_trade?: number;
   lot_mode?: string;
+}
+
+export interface TradeAuditMetadata {
+  daily_bias: string | null;
+  pdh: number | null;
+  pdl: number | null;
+  manipulation_type: string | null;
+  manipulation_level: number | null;
+  choch_detected: boolean | null;
+  entropy: number | null;
+  entropy_zscore: number | null;
+  ml_confidence: number | null;
+  risk_percent: number | null;
+  fvg_tp: number | null;
+}
+
+export interface TradeAudit {
+  entry_price: number;
+  exit_price: number;
+  direction: string;
+  lot_size: number;
+  profit: number;
+  commission: number;
+  gross_profit: number;
+  stop_loss: number;
+  take_profit: number;
+  bar_index: number;
+  exit_reason: string;
+  entry_time: string | null;
+  risk_reward: number;
+  effective_risk: number;
+  signal_metadata: TradeAuditMetadata;
+}
+
+export interface SessionMetrics {
+  trades: number;
+  win_rate: number;
+  profit_factor: number;
+  net_profit: number;
+}
+
+export interface SessionAnalysis {
+  london: SessionMetrics;
+  ny: SessionMetrics;
+}
+
+export interface BuySellDistribution {
+  buy_count: number;
+  sell_count: number;
+  buy_pct: number;
+  sell_pct: number;
+  ratio: number;
 }
 
 export interface BacktestResult {
@@ -121,6 +177,10 @@ export interface BacktestResult {
   net_profit: number;
   profit_factor: number;
   sharpe_ratio: number;
+  sortino_ratio: number;
+  calmar_ratio: number;
+  var_95: number;
+  cvar_95: number;
   max_drawdown_percent: number;
   return_percent: number;
   max_consecutive_wins: number;
@@ -136,6 +196,12 @@ export interface BacktestResult {
   total_loss: number;
   total_bars: number;
   equity_curve: number[];
+  trades: TradeAudit[];
+  date_from: string | null;
+  date_to: string | null;
+  warmup_bars: number;
+  session_analysis: SessionAnalysis | null;
+  buy_sell_distribution: BuySellDistribution | null;
 }
 
 // ─── ML ───────────────────────────────────────────────

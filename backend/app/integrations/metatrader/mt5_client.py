@@ -581,6 +581,35 @@ class MT5Client:
 
         return await asyncio.to_thread(_get)
 
+    async def get_historical_data_range(
+        self,
+        symbol: str,
+        timeframe: Timeframe,
+        date_from: datetime,
+        date_to: datetime,
+    ) -> pd.DataFrame:
+        """Get historical OHLCV data for a specific date range from MT5."""
+        self._ensure_initialized()
+
+        def _get():
+            self._validate_symbol(symbol)
+            rates = mt5.copy_rates_range(
+                symbol, timeframe.mt5_value, date_from, date_to
+            )
+
+            if rates is None or len(rates) == 0:
+                raise ValueError(
+                    f"No historical data for {symbol} {timeframe.value} "
+                    f"from {date_from} to {date_to}"
+                )
+
+            df = pd.DataFrame(rates)
+            df["time"] = pd.to_datetime(df["time"], unit="s")
+            df.set_index("time", inplace=True)
+            return df
+
+        return await asyncio.to_thread(_get)
+
     async def get_account_info(self) -> dict[str, Any]:
         """Get current account information."""
         self._ensure_initialized()

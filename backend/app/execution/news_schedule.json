@@ -1,0 +1,12 @@
+[
+  {"date": "2026-03-06", "time_utc": "13:30", "impact": "high", "currency": "USD", "event": "Non-Farm Payrolls"},
+  {"date": "2026-03-06", "time_utc": "13:30", "impact": "high", "currency": "USD", "event": "Unemployment Rate"},
+  {"date": "2026-03-12", "time_utc": "12:30", "impact": "high", "currency": "USD", "event": "CPI m/m"},
+  {"date": "2026-03-12", "time_utc": "12:30", "impact": "high", "currency": "USD", "event": "Core CPI m/m"},
+  {"date": "2026-03-19", "time_utc": "18:00", "impact": "high", "currency": "USD", "event": "FOMC Rate Decision"},
+  {"date": "2026-03-19", "time_utc": "18:30", "impact": "high", "currency": "USD", "event": "FOMC Press Conference"},
+  {"date": "2026-03-06", "time_utc": "12:45", "impact": "high", "currency": "EUR", "event": "ECB Rate Decision"},
+  {"date": "2026-03-06", "time_utc": "13:30", "impact": "high", "currency": "EUR", "event": "ECB Press Conference"},
+  {"date": "2026-03-20", "time_utc": "12:00", "impact": "high", "currency": "GBP", "event": "BOE Rate Decision"},
+  {"date": "2026-03-27", "time_utc": "12:30", "impact": "high", "currency": "USD", "event": "GDP q/q Final"}
+]
