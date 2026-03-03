@@ -14,6 +14,7 @@ import {
 import api from "@/lib/api";
 import { useAppStore } from "@/store";
 import type { OrderResponse } from "@/types";
+import { parseFormattedNumber } from "@/lib/numberFormat";
 import { OrderTypeSelect, type OrderTypeId } from "@/components/ui/order-type-select";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
@@ -183,7 +184,7 @@ export default function ManualTradeForm() {
 
   const validate = (direction: "BUY" | "SELL"): boolean => {
     const newErrors: typeof errors = {};
-    const vol = parseFloat(volume);
+    const vol = parseFormattedNumber(volume);
 
     if (isNaN(vol) || vol <= 0) {
       newErrors.volume = "Must be > 0";
@@ -195,13 +196,13 @@ export default function ManualTradeForm() {
     if (!isMarket) {
       if (!limitPrice) {
         newErrors.limitPrice = "Price is required for pending orders";
-      } else if (isNaN(parseFloat(limitPrice))) {
+      } else if (isNaN(parseFormattedNumber(limitPrice))) {
         newErrors.limitPrice = "Invalid number";
       }
     }
 
     if (sl && info) {
-      const slVal = parseFloat(sl);
+      const slVal = parseFormattedNumber(sl);
       if (isNaN(slVal)) {
         newErrors.sl = "Invalid number";
       } else {
@@ -220,7 +221,7 @@ export default function ManualTradeForm() {
     }
 
     if (tp && info) {
-      const tpVal = parseFloat(tp);
+      const tpVal = parseFormattedNumber(tp);
       if (isNaN(tpVal)) {
         newErrors.tp = "Invalid number";
       } else {
@@ -252,9 +253,9 @@ export default function ManualTradeForm() {
         const { data } = await api.post<OrderResponse>("/orders/market", {
           symbol: activeSymbol,
           direction,
-          volume: parseFloat(volume),
-          stop_loss: sl ? parseFloat(sl) : undefined,
-          take_profit: tp ? parseFloat(tp) : undefined,
+          volume: parseFormattedNumber(volume),
+          stop_loss: sl ? parseFormattedNumber(sl) : undefined,
+          take_profit: tp ? parseFormattedNumber(tp) : undefined,
           comment: "manual",
         });
         if (data.success) {
@@ -284,10 +285,10 @@ export default function ManualTradeForm() {
         const { data } = await api.post<OrderResponse>("/orders/limit", {
           symbol: activeSymbol,
           direction: pendingDirection,
-          volume: parseFloat(volume),
-          price: parseFloat(limitPrice),
-          stop_loss: sl ? parseFloat(sl) : undefined,
-          take_profit: tp ? parseFloat(tp) : undefined,
+          volume: parseFormattedNumber(volume),
+          price: parseFormattedNumber(limitPrice),
+          stop_loss: sl ? parseFormattedNumber(sl) : undefined,
+          take_profit: tp ? parseFormattedNumber(tp) : undefined,
           comment: "manual-pending",
         });
         if (data.success) {

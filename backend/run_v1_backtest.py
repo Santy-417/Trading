@@ -19,15 +19,33 @@ async def run_backtest(symbol: str, bars: int = 10000):
     logger.info(f"Starting V1 Backtest: {symbol} | {bars} bars")
     logger.info(f"=" * 80)
 
-    # Load data
+    # Initialize MT5 client before loading data
+    from app.integrations.metatrader.mt5_client import mt5_client
+
+    print(f"Initializing MT5 client...")
+    try:
+        initialized = await mt5_client.initialize()
+        if not initialized:
+            raise RuntimeError("Failed to initialize MT5 client")
+        print(f"MT5 client initialized successfully")
+    except Exception as e:
+        print(f"Error initializing MT5: {e}")
+        raise
+
+    # Load data (now MT5 is initialized)
     print(f"Loading {bars} bars of {symbol} H1 data from MT5...")
     loader = DataLoader()
     df = await loader.load_from_mt5(symbol, "H1", count=bars)
     df = DataLoader.validate_data(df)
     print(f"Loaded {len(df)} bars")
 
-    # Get strategy instance
-    strategy = get_strategy("bias")
+    # Get strategy instance with optimized settings for fast backtesting
+    # Disable entropy z-score (slow) and use absolute threshold only (fast)
+    from app.strategies.bias import BiasStrategy
+    strategy = BiasStrategy(
+        entropy_threshold=3.1,
+        use_entropy_zscore=False,  # Disable slow z-score calculation for backtesting
+    )
 
     # Run backtest
     print(f"Running backtest...")

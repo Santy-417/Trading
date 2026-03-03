@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 
 from app.core.logging_config import get_logger
+from app.execution.news_filter import news_filter
 from app.integrations.metatrader.mt5_client import MT5Client, OrderType, Timeframe, mt5_client
 from app.risk.risk_manager import RiskManager, risk_manager
 from app.strategies import get_strategy
@@ -149,8 +150,12 @@ class ExecutionEngine:
 
     async def _run_loop(self) -> None:
         """Main trading loop."""
+        self._time_close_done_today = False
         while self._state == BotState.RUNNING:
             try:
+                # Time-based close: if strategy has close_time_utc, close all positions
+                await self._check_time_close()
+
                 for symbol in self._symbols:
                     await self._process_symbol(symbol)
                 await asyncio.sleep(self._loop_interval)
@@ -161,9 +166,54 @@ class ExecutionEngine:
                 self._state = BotState.ERROR
                 break
 
+    async def _check_time_close(self) -> None:
+        """Close all positions if strategy has a time-based close and time is reached."""
+        if self._strategy is None:
+            return
+
+        close_time = getattr(self._strategy, "close_time_utc", None)
+        if close_time is None:
+            return
+
+        now = datetime.now(timezone.utc)
+        close_hour, close_minute = close_time
+        current_mins = now.hour * 60 + now.minute
+        close_mins = close_hour * 60 + close_minute
+
+        # Reset flag at midnight
+        if current_mins < 60:
+            self._time_close_done_today = False
+
+        if current_mins >= close_mins and not self._time_close_done_today:
+            self._time_close_done_today = True
+            self._log(
+                "info",
+                f"Time-based close triggered at {now.strftime('%H:%M')} UTC "
+                f"(target: {close_hour:02d}:{close_minute:02d} UTC)",
+            )
+            try:
+                close_results = await self._mt5.close_all_positions()
+                closed_count = sum(1 for r in close_results if r.success)
+                self._log(
+                    "info",
+                    f"Time-based close: {closed_count}/{len(close_results)} positions closed",
+                )
+            except Exception as e:
+                self._log("error", f"Time-based close failed: {e}")
+
     async def _process_symbol(self, symbol: str) -> None:
         """Process a single symbol: get data -> generate signal -> execute."""
         if self._strategy is None:
+            return
+
+        # 0. News filter: skip if High Impact news is nearby
+        now_utc = datetime.now(timezone.utc)
+        if news_filter.is_restricted(symbol, now_utc):
+            self._log(
+                "warning",
+                f"[{symbol}] Skipped: High Impact news within ±5 min window",
+                symbol,
+            )
             return
 
         # 1. Get market data
@@ -174,6 +224,22 @@ class ExecutionEngine:
         except Exception as e:
             self._log("error", f"[{symbol}] Data fetch failed: {e}", symbol)
             return
+
+        # 1b. Multi-timeframe: load lower TF data if strategy requires it
+        choch_tf = getattr(self._strategy, "choch_timeframe", None)
+        if choch_tf:
+            try:
+                lower_tf = Timeframe(choch_tf)
+                df_lower = await self._mt5.get_historical_data(symbol, lower_tf, count=200)
+                self._strategy._df_lower_tf = df_lower
+                self._log(
+                    "info",
+                    f"[{symbol}] Loaded {len(df_lower)} bars ({choch_tf}) for multi-TF",
+                    symbol,
+                )
+            except Exception as e:
+                self._log("warning", f"[{symbol}] Lower TF data failed: {e}", symbol)
+                self._strategy._df_lower_tf = None
 
         # 2. Generate signal
         signal = self._strategy.generate_signal(df, symbol, self._timeframe)
@@ -198,8 +264,17 @@ class ExecutionEngine:
             self._log("warning", f"[{symbol}] Trade blocked by risk: {risk_result.reason}", symbol)
             return
 
-        # 4. Calculate lot size
+        # 4. Calculate lot size (with ML-based risk override if available)
         symbol_info = await self._mt5.get_symbol_info(symbol)
+        risk_kwargs = {}
+        if signal.metadata and "risk_percent" in signal.metadata:
+            risk_kwargs["risk_percent"] = signal.metadata["risk_percent"]
+            self._log(
+                "info",
+                f"[{symbol}] ML risk override: {signal.metadata['risk_percent']}%",
+                symbol,
+            )
+
         lot_size = self._risk.calculate_lot_size(
             balance=account["balance"],
             equity=account["equity"],
@@ -208,6 +283,7 @@ class ExecutionEngine:
             volume_min=symbol_info.get("volume_min", 0.01),
             volume_max=symbol_info.get("volume_max", 100.0),
             volume_step=symbol_info.get("volume_step", 0.01),
+            **risk_kwargs,
         )
 
         # 5. Execute trade

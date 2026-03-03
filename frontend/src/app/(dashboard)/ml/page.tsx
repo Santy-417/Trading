@@ -8,7 +8,6 @@ import {
   CardContent,
   Chip,
   CircularProgress,
-  TextField,
   Typography,
   Alert,
   Table,
@@ -18,6 +17,7 @@ import {
   TableRow,
 } from "@mui/material";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import Grid from "@mui/material/Grid";
 import { Brain, Sparkles } from "lucide-react";
 import api from "@/lib/api";
@@ -26,7 +26,7 @@ import type { TrainResponse, PredictResponse, MLModel } from "@/types";
 export default function MLPage() {
   const [symbol, setSymbol] = useState("EURUSD");
   const [timeframe, setTimeframe] = useState("H1");
-  const [bars, setBars] = useState(5000);
+  const [bars, setBars] = useState("5000");
   const [loading, setLoading] = useState(false);
   const [trainResult, setTrainResult] = useState<TrainResponse | null>(null);
   const [prediction, setPrediction] = useState<PredictResponse | null>(null);
@@ -38,10 +38,17 @@ export default function MLPage() {
   }, []);
 
   const handleTrain = async () => {
+    const barsNum = parseInt(bars) || 5000;
+
+    if (barsNum < 500 || barsNum > 50000) {
+      setError("Historical bars must be between 500 and 50,000");
+      return;
+    }
+
     setLoading(true);
     setError("");
     try {
-      const { data } = await api.post<TrainResponse>("/ml/train", { symbol, timeframe, bars });
+      const { data } = await api.post<TrainResponse>("/ml/train", { symbol, timeframe, bars: barsNum });
       setTrainResult(data);
       // Refresh models list
       const modelsRes = await api.get("/ml/models");
@@ -102,12 +109,14 @@ export default function MLPage() {
                     { id: "D1", label: "D1", description: "Daily" },
                   ]}
                 />
-                <TextField
+                <FormattedNumberInput
                   size="small"
                   label="Historical Bars"
-                  type="number"
                   value={bars}
-                  onChange={(e) => setBars(Number(e.target.value))}
+                  onChange={setBars}
+                  decimals={0}
+                  helperText="Min: 500, Max: 50000 candles"
+                  fullWidth
                 />
                 <Button
                   variant="contained"

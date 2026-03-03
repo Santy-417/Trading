@@ -2,7 +2,6 @@
 
 import { TextField, TextFieldProps } from "@mui/material";
 import { useState, useEffect } from "react";
-import { formatNumberWithDots, parseFormattedNumber } from "@/lib/numberFormat";
 
 interface FormattedNumberInputProps extends Omit<TextFieldProps, "value" | "onChange"> {
   value: string;
@@ -24,29 +23,38 @@ export function FormattedNumberInput({
   // Sync internal state when external value changes
   useEffect(() => {
     if (!isFocused) {
-      const num = parseFormattedNumber(value);
-      setDisplayValue(num === 0 && value === "" ? "" : formatNumberWithDots(num, decimals));
+      const num = parseFloat(value);
+      if (isNaN(num) || (num === 0 && value === "")) {
+        setDisplayValue("");
+      } else {
+        setDisplayValue(num.toFixed(decimals));
+      }
     }
   }, [value, decimals, isFocused]);
 
   const handleFocus = () => {
     setIsFocused(true);
     // Show raw number on focus for easy editing
-    const num = parseFormattedNumber(value);
-    setDisplayValue(num === 0 && value === "" ? "" : num.toString());
+    const num = parseFloat(value);
+    if (isNaN(num) || (num === 0 && value === "")) {
+      setDisplayValue("");
+    } else {
+      setDisplayValue(num.toString());
+    }
   };
 
   const handleBlur = () => {
     setIsFocused(false);
-    // Format on blur
+    // Keep raw number format (dot as decimal) - MT5 style
     if (displayValue === "") {
       onChange("");
       setDisplayValue("");
     } else {
       const num = parseFloat(displayValue);
       if (!isNaN(num)) {
-        onChange(num.toString());
-        setDisplayValue(formatNumberWithDots(num, decimals));
+        const formatted = num.toFixed(decimals);
+        onChange(formatted);
+        setDisplayValue(formatted);
       }
     }
   };

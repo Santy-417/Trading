@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -29,6 +29,7 @@ class SimulatedTrade:
     slippage_cost: float = 0.0
     gross_profit: float = 0.0
     bar_index: int = 0
+    exit_reason: str = ""
 
 
 class TradeSimulator:
@@ -74,6 +75,7 @@ class TradeSimulator:
 
         # Walk through subsequent bars
         exit_price = None
+        exit_reason = ""
         for i in range(bar_index + 1, len(high_prices)):
             bar_high = high_prices[i]
             bar_low = low_prices[i]
@@ -82,17 +84,21 @@ class TradeSimulator:
                 # Check SL first (worst case)
                 if bar_low <= stop_loss:
                     exit_price = stop_loss
+                    exit_reason = "SL"
                     break
                 # Check TP
                 if bar_high >= take_profit:
                     exit_price = take_profit
+                    exit_reason = "TP"
                     break
             else:  # SELL
                 if bar_high >= stop_loss:
                     exit_price = stop_loss
+                    exit_reason = "SL"
                     break
                 if bar_low <= take_profit:
                     exit_price = take_profit
+                    exit_reason = "TP"
                     break
 
         if exit_price is None:
@@ -125,6 +131,7 @@ class TradeSimulator:
             slippage_cost=round(slippage_cost, 2),
             gross_profit=round(gross_profit, 2),
             bar_index=bar_index,
+            exit_reason=exit_reason,
         )
 
 

@@ -44,7 +44,7 @@ class TestStrategyRegistry:
             get_strategy("nonexistent")
 
     def test_registry_has_expected_strategies(self):
-        assert set(STRATEGY_REGISTRY.keys()) == {"fibonacci", "ict", "manual", "hybrid_ml"}
+        assert set(STRATEGY_REGISTRY.keys()) == {"fibonacci", "ict", "manual", "hybrid_ml", "bias"}
 
 
 class TestTradeSignal:

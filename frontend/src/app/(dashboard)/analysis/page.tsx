@@ -6,13 +6,13 @@ import {
   Button,
   Card,
   CardContent,
-  TextField,
   Typography,
   Alert,
   CircularProgress,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
+import { FormattedNumberInput } from "@/components/ui/formatted-number-input";
 import { LineChart, FileText, SlidersHorizontal, Shield, ArrowLeftRight } from "lucide-react";
 import api from "@/lib/api";
 import type { AIResponse } from "@/types";
@@ -21,13 +21,20 @@ type AnalysisType = "trades" | "summary" | "parameters" | "risk" | "compare";
 
 export default function AnalysisPage() {
   const [analysisType, setAnalysisType] = useState<AnalysisType>("trades");
-  const [days, setDays] = useState(7);
+  const [days, setDays] = useState("7");
   const [period, setPeriod] = useState("weekly");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AIResponse | null>(null);
   const [error, setError] = useState("");
 
   const handleAnalyze = async () => {
+    const daysNum = parseInt(days) || 7;
+
+    if ((analysisType === "trades" || analysisType === "risk") && (daysNum < 1 || daysNum > 90)) {
+      setError("Days must be between 1 and 90");
+      return;
+    }
+
     setLoading(true);
     setError("");
     setResult(null);
@@ -38,7 +45,7 @@ export default function AnalysisPage() {
       switch (analysisType) {
         case "trades":
           endpoint = "/ai/analyze-trades";
-          payload = { days };
+          payload = { days: daysNum };
           break;
         case "summary":
           endpoint = "/ai/performance-summary";
@@ -50,7 +57,7 @@ export default function AnalysisPage() {
           break;
         case "risk":
           endpoint = "/ai/risk-review";
-          payload = { days };
+          payload = { days: daysNum };
           break;
         case "compare":
           endpoint = "/ai/compare-strategies";
@@ -108,13 +115,13 @@ export default function AnalysisPage() {
 
               <Box sx={{ mt: 3, display: "flex", flexDirection: "column", gap: 2 }}>
                 {(analysisType === "trades" || analysisType === "risk") && (
-                  <TextField
+                  <FormattedNumberInput
                     size="small"
                     label="Days to analyze"
-                    type="number"
                     value={days}
-                    onChange={(e) => setDays(Number(e.target.value))}
-                    inputProps={{ min: 1, max: 90 }}
+                    onChange={setDays}
+                    decimals={0}
+                    helperText="Range: 1 - 90 days"
                     fullWidth
                   />
                 )}

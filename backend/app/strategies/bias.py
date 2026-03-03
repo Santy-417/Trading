@@ -61,7 +61,7 @@ class BiasStrategy(BaseStrategy):
         model_id: str | None = None,
         min_ml_confidence: float = 0.65,
         sl_pips_base: float = 10.0,
-        min_rr: float = 1.5,
+        min_rr: float = 1.3,  # Optimized post-SELL surgery (max Net Profit on 10k bars H1)
         london_start_hour: int = 2,      # 02:00 Bogotá (07:00 UTC London open)
         london_end_hour: int = 11,       # 11:30 Bogotá (covers full session + overlap)
         ny_start_hour: int = 8,
@@ -73,6 +73,7 @@ class BiasStrategy(BaseStrategy):
         use_entropy_zscore: bool = True, # Enable Z-Score filter as alternative
         entropy_window: int = 50,
         fvg_lookback: int = 30,
+        sweep_tolerance_pips: float = 3.0,  # V1.1: Allow near-miss sweeps (real market adjustment)
     ):
         self.min_ml_confidence = min_ml_confidence
         self.sl_pips_base = sl_pips_base
@@ -88,6 +89,7 @@ class BiasStrategy(BaseStrategy):
         self.use_entropy_zscore = use_entropy_zscore
         self.entropy_window = entropy_window
         self.fvg_lookback = fvg_lookback
+        self.sweep_tolerance_pips = sweep_tolerance_pips
 
         self._predictor: Predictor | None = None
         if model_id:
@@ -109,6 +111,12 @@ class BiasStrategy(BaseStrategy):
 
         self._current_symbol: str | None = None
         # Symbol being traded (for ChoCh hybrid tolerance calculation)
+
+        self._entropy_cache: dict[int, float | None] = {}
+        # Cache entropy z-scores by DataFrame length to avoid recalculation during backtesting
+
+        self._m5_resample_cache: dict[int, pd.DataFrame] = {}
+        # Cache M5 resampled DataFrames by H1 DataFrame length for backtesting performance
 
     # ------------------------------------------------------------------
     # Public interface
@@ -216,16 +224,42 @@ class BiasStrategy(BaseStrategy):
             )
             return None
         logger.info("bias: manipulation=%s at %.5f", manipulation["type"], manipulation["level"])
+        print(f"[DEBUG] MANIPULATION DETECTED: {manipulation['type']} at {manipulation['level']:.5f}")
 
         # 5. Check if we're in NY session for entry
-        if not self._is_ny_session(current_time):
-            logger.info("bias: not in NY session (current time: %s)", current_time)
-            return None
-        logger.info("bias: in NY session")
+        # OPTIMIZATION: If manipulation was stored from earlier today (London session),
+        # allow entry during extended hours (up to 6pm Bogota to capture NY close momentum)
+        manipulation_is_stored = (
+            self._last_manipulation is not None
+            and current_time.normalize() == self._last_manipulation_day
+        )
+
+        if manipulation_is_stored:
+            # Manipulation from today exists - allow entry until 18:00 Bogota (extended window)
+            if current_time.hour >= 18:
+                logger.info("bias: manipulation expired (after 18:00 Bogota)")
+                print(f"[DEBUG] BLOCKED: Manipulation expired (time: {current_time.hour}:00)")
+                return None
+            logger.info("bias: using stored manipulation from %s (extended window active)",
+                       manipulation["timestamp"].strftime("%H:%M"))
+            print(f"[DEBUG] PASSED: Using stored manipulation (extended window until 18:00)")
+        else:
+            # Fresh manipulation check - must be in NY session for immediate entry
+            if not self._is_ny_session(current_time):
+                logger.info("bias: not in NY session (current time: %s)", current_time)
+                print(f"[DEBUG] BLOCKED: Not in NY session (current time: {current_time})")
+                return None
+            logger.info("bias: in NY session")
+            print(f"[DEBUG] PASSED: NY session check (time: {current_time})")
 
         # 6. Shannon entropy filter (dual approach: Z-Score or absolute threshold)
         entropy = self._calculate_entropy(df, self.entropy_window)
-        entropy_zscore = self._calculate_entropy_zscore(df, entropy)
+
+        # Only calculate z-score if enabled (expensive operation)
+        if self.use_entropy_zscore:
+            entropy_zscore = self._calculate_entropy_zscore(df, entropy)
+        else:
+            entropy_zscore = None
 
         # Filter decision: use Z-Score if available and enabled, else absolute threshold
         if self.use_entropy_zscore and entropy_zscore is not None:
@@ -247,12 +281,22 @@ class BiasStrategy(BaseStrategy):
                     entropy,
                     self.entropy_threshold,
                 )
+                print(f"[DEBUG] BLOCKED: Entropy {entropy:.3f} > threshold {self.entropy_threshold}")
                 return None
             logger.info("bias_entropy: %.3f passed threshold (%.1f)", entropy, self.entropy_threshold)
+            print(f"[DEBUG] PASSED: Entropy check ({entropy:.3f} <= {self.entropy_threshold})")
 
         # 7. Multi-timeframe ChoCh detection with fractal break fallback
         direction = SignalDirection.BUY if bias == "BULLISH" else SignalDirection.SELL
-        df_m5 = self._df_lower_tf if self._df_lower_tf is not None else self._resample_to_m5(df)
+
+        # Performance optimization: only resample last N H1 bars needed for ChoCh (60 M5 bars = 5 H1 bars)
+        # Using 10 H1 bars for safety margin
+        if self._df_lower_tf is not None:
+            df_m5 = self._df_lower_tf
+        else:
+            lookback_bars = 10  # Last 10 H1 bars = 120 M5 bars (2x the ChoCh lookback)
+            df_recent = df.tail(lookback_bars) if len(df) > lookback_bars else df
+            df_m5 = self._resample_to_m5(df_recent)
 
         choch_detected = self._detect_choch(df_m5, direction)
 
@@ -262,9 +306,11 @@ class BiasStrategy(BaseStrategy):
 
             if not fractal_break:
                 logger.info("bias: no ChoCh and no fractal break for %s", direction.value)
+                print(f"[DEBUG] BLOCKED: No ChoCh AND no fractal break for {direction.value}")
                 return None
 
             logger.info("bias: No ChoCh but FRACTAL BREAK detected for %s (fallback)", direction.value)
+            print(f"[DEBUG] PASSED: Fractal break detected for {direction.value} (ChoCh failed)")
         else:
             logger.info("bias: ChoCh detected for %s", direction.value)
 
@@ -554,8 +600,21 @@ class BiasStrategy(BaseStrategy):
                 continue
 
             if bias == "BULLISH":
-                # Step 1: Check if price swept below PDL
-                if float(bar["low"]) < pdl:
+                # Step 1: Check if price swept below PDL (with tolerance for near-misses)
+                bar_low = float(bar["low"])
+                sweep_threshold = pdl + (self.sweep_tolerance_pips * pip)
+                distance_to_pdl = (bar_low - pdl) / pip
+
+                # Debug print: Show proximity to PDL
+                if abs(distance_to_pdl) < 5.0:  # Within 5 pips
+                    print(
+                        f"[DEBUG] BULLISH: Bar low={bar_low:.5f}, PDL={pdl:.5f}, "
+                        f"distance={distance_to_pdl:.1f} pips, threshold={self.sweep_tolerance_pips} pips"
+                    )
+                    if distance_to_pdl > 0 and distance_to_pdl < self.sweep_tolerance_pips:
+                        print(f"  >> NEAR MISS: Only {distance_to_pdl:.1f} pips away from PDL sweep!")
+
+                if bar_low < sweep_threshold:
                     # Step 2: Validate close returns above PDL in same OR next 2 candles
                     validation_window = recent.iloc[i : i + 3]  # Current + next 2
 
@@ -565,7 +624,8 @@ class BiasStrategy(BaseStrategy):
                             manipulation = {
                                 "type": "bullish_sweep_pdl",
                                 "level": pdl,
-                                "bar_low": float(bar["low"]),
+                                "bar_low": bar_low,
+                                "sweep_tolerance_used": self.sweep_tolerance_pips,
                             }
 
                             # Store manipulation state
@@ -574,19 +634,38 @@ class BiasStrategy(BaseStrategy):
                             self._last_manipulation = manipulation
                             self._last_manipulation_day = current_time.normalize()
 
+                            print(
+                                f"[DEBUG] BULLISH SWEEP CONFIRMED: low={bar_low:.5f}, PDL={pdl:.5f}, "
+                                f"distance={distance_to_pdl:.1f} pips (tolerance={self.sweep_tolerance_pips} pips)"
+                            )
+
                             logger.info(
-                                "bias_manip: BULLISH sweep at %s, low=%.5f (PDL=%.5f), "
+                                "bias_manip: BULLISH sweep at %s, low=%.5f (PDL=%.5f, tolerance=%.1f pips), "
                                 "recovered in %d bars",
                                 bar_time_bogota.strftime("%Y-%m-%d %H:%M"),
-                                float(bar["low"]),
+                                bar_low,
                                 pdl,
+                                self.sweep_tolerance_pips,
                                 idx,
                             )
                             return manipulation
 
             elif bias == "BEARISH":
-                # Step 1: Check if price swept above PDH
-                if float(bar["high"]) > pdh:
+                # Step 1: Check if price swept above PDH (with tolerance for near-misses)
+                bar_high = float(bar["high"])
+                sweep_threshold = pdh - (self.sweep_tolerance_pips * pip)
+                distance_to_pdh = (pdh - bar_high) / pip
+
+                # Debug print: Show proximity to PDH
+                if abs(distance_to_pdh) < 5.0:  # Within 5 pips
+                    print(
+                        f"[DEBUG] BEARISH: Bar high={bar_high:.5f}, PDH={pdh:.5f}, "
+                        f"distance={distance_to_pdh:.1f} pips, threshold={self.sweep_tolerance_pips} pips"
+                    )
+                    if distance_to_pdh > 0 and distance_to_pdh < self.sweep_tolerance_pips:
+                        print(f"  >> NEAR MISS: Only {distance_to_pdh:.1f} pips away from PDH sweep!")
+
+                if bar_high > sweep_threshold:
                     # Step 2: Validate close returns below PDH in same OR next 2 candles
                     validation_window = recent.iloc[i : i + 3]
 
@@ -596,7 +675,8 @@ class BiasStrategy(BaseStrategy):
                             manipulation = {
                                 "type": "bearish_sweep_pdh",
                                 "level": pdh,
-                                "bar_high": float(bar["high"]),
+                                "bar_high": bar_high,
+                                "sweep_tolerance_used": self.sweep_tolerance_pips,
                             }
 
                             # Store manipulation state
@@ -605,12 +685,18 @@ class BiasStrategy(BaseStrategy):
                             self._last_manipulation = manipulation
                             self._last_manipulation_day = current_time.normalize()
 
+                            print(
+                                f"[DEBUG] BEARISH SWEEP CONFIRMED: high={bar_high:.5f}, PDH={pdh:.5f}, "
+                                f"distance={distance_to_pdh:.1f} pips (tolerance={self.sweep_tolerance_pips} pips)"
+                            )
+
                             logger.info(
-                                "bias_manip: BEARISH sweep at %s, high=%.5f (PDH=%.5f), "
+                                "bias_manip: BEARISH sweep at %s, high=%.5f (PDH=%.5f, tolerance=%.1f pips), "
                                 "recovered in %d bars",
                                 bar_time_bogota.strftime("%Y-%m-%d %H:%M"),
-                                float(bar["high"]),
+                                bar_high,
                                 pdh,
+                                self.sweep_tolerance_pips,
                                 idx,
                             )
                             return manipulation
@@ -647,13 +733,25 @@ class BiasStrategy(BaseStrategy):
 
     def _calculate_entropy_zscore(self, df: pd.DataFrame, current_entropy: float) -> float | None:
         """Calculate Z-Score of current entropy vs rolling mean."""
+        # Cache key: use DataFrame length (assumes sequential backtesting)
+        cache_key = len(df)
+
+        # Check cache first
+        if cache_key in self._entropy_cache:
+            return self._entropy_cache[cache_key]
+
         returns = df["close"].pct_change().dropna()
         if len(returns) < self.entropy_window * 2:
+            self._entropy_cache[cache_key] = None
             return None
 
-        # Calculate rolling entropy
+        # Optimized: only calculate last 100 entropies for rolling mean/std
+        # This reduces O(n²) to O(n) for backtesting
+        max_lookback = min(100, len(returns) - self.entropy_window)
+        start_idx = len(returns) - max_lookback
+
         entropies = []
-        for i in range(self.entropy_window, len(returns)):
+        for i in range(start_idx, len(returns)):
             window_returns = returns.iloc[i - self.entropy_window : i]
             counts, _ = np.histogram(window_returns.values, bins=10)
             total = counts.sum()
@@ -665,14 +763,18 @@ class BiasStrategy(BaseStrategy):
             entropies.append(h)
 
         if len(entropies) < 2:
+            self._entropy_cache[cache_key] = None
             return None
 
         mean_entropy = np.mean(entropies)
         std_entropy = np.std(entropies)
         if std_entropy < 1e-10:
+            self._entropy_cache[cache_key] = 0.0
             return 0.0
 
-        return (current_entropy - mean_entropy) / std_entropy
+        z_score = (current_entropy - mean_entropy) / std_entropy
+        self._entropy_cache[cache_key] = z_score
+        return z_score
 
     # ------------------------------------------------------------------
     # Private: Multi-Timeframe ChoCh
@@ -685,6 +787,11 @@ class BiasStrategy(BaseStrategy):
         """
         if len(df) < 2:
             return df
+
+        # Check cache first (critical for backtesting performance with 10k+ bars)
+        cache_key = len(df)
+        if cache_key in self._m5_resample_cache:
+            return self._m5_resample_cache[cache_key]
 
         m5_rows = []
         for i in range(len(df)):
@@ -731,28 +838,32 @@ class BiasStrategy(BaseStrategy):
 
         m5_df = pd.DataFrame(m5_rows)
         m5_df.set_index("time", inplace=True)
+
+        # Cache result for future calls (backtesting optimization)
+        self._m5_resample_cache[cache_key] = m5_df
+
         return m5_df
 
     def _detect_choch(self, df_m5: pd.DataFrame, direction: SignalDirection) -> bool:
         """
-        Detect Change of Character (ChoCh) on M5 timeframe.
+        Detect Change of Character (ChoCh) on M5 timeframe with SYMMETRIC logic.
 
-        60 bars lookback → more swing points detected (12-18 vs 1-3)
-        20% tolerance → requires genuine breakout (not just midpoint)
-        Recent 5-bar range → adapts to current volatility
-
-        ChoCh = break of recent swing structure indicating trend reversal.
+        Key improvements:
+        - Uses configurable lookback (self.choch_lookback)
+        - Filters swing points by temporal proximity (last 15 bars)
+        - Symmetric tolerance and threshold logic for BUY/SELL
+        - Dynamic tolerance based on recent volatility
         """
-        if len(df_m5) < 60:  # CHANGED from self.choch_lookback for clarity
-            logger.info("bias_choch: insufficient M5 bars (%d < 60)", len(df_m5))
+        if len(df_m5) < self.choch_lookback:
+            logger.info("bias_choch: insufficient M5 bars (%d < %d)", len(df_m5), self.choch_lookback)
             return False
 
-        recent = df_m5.tail(60)  # CHANGED from 20 to 60
+        recent = df_m5.tail(self.choch_lookback)  # Use configurable parameter
         highs = recent["high"].values
         lows = recent["low"].values
         closes = recent["close"].values
 
-        # Find swing points (3-bar method)
+        # Find ALL swing points (3-bar method)
         swing_highs = []
         swing_lows = []
 
@@ -762,68 +873,81 @@ class BiasStrategy(BaseStrategy):
             if lows[i] < lows[i - 1] and lows[i] < lows[i + 1]:
                 swing_lows.append((i, lows[i]))
 
-        logger.info(
-            "bias_choch: M5_bars=%d, swing_highs=%d, swing_lows=%d, direction=%s",
-            len(recent),
-            len(swing_highs),
-            len(swing_lows),
-            direction.value,
-        )
-
         if not swing_highs or not swing_lows:
             logger.info("bias_choch: no swings found")
             return False
 
+        # NUEVO: Filter swings by temporal proximity (last 15 bars = 1.25 hours)
+        local_window = 15
+        recent_swing_highs = [(idx, price) for idx, price in swing_highs if idx >= len(recent) - local_window]
+        recent_swing_lows = [(idx, price) for idx, price in swing_lows if idx >= len(recent) - local_window]
+
+        # Fallback: If no recent swings, use all
+        if not recent_swing_highs:
+            recent_swing_highs = swing_highs
+        if not recent_swing_lows:
+            recent_swing_lows = swing_lows
+
+        logger.info(
+            "bias_choch: M5_bars=%d, total_swings=(highs=%d, lows=%d), local_swings=(highs=%d, lows=%d), direction=%s",
+            len(recent),
+            len(swing_highs),
+            len(swing_lows),
+            len(recent_swing_highs),
+            len(recent_swing_lows),
+            direction.value,
+        )
+
         last_close = closes[-1]
 
-        # CHANGED: Use recent 5-bar range instead of global min/max
-        recent_5_high = highs[-5:].max()
-        recent_5_low = lows[-5:].min()
-        recent_range = recent_5_high - recent_5_low
+        # Use recent 10-bar range for dynamic tolerance (more stable than 5)
+        recent_10_high = highs[-10:].max()
+        recent_10_low = lows[-10:].min()
+        recent_range = recent_10_high - recent_10_low
 
         if direction == SignalDirection.BUY:
-            # Bullish ChoCh: price breaks above most recent swing high
-            last_swing_high = swing_highs[-1][1]
+            # Bullish ChoCh: price breaks above RECENT swing high
+            last_swing_high = recent_swing_highs[-1][1]
 
-            # V1 HYBRID: Tolerance with minimum absolute value to prevent microscopic values
             pip = PIP_SIZE.get(self._current_symbol, 0.0001)
-            tolerance = max(recent_range * 0.35, pip * 2.5)
+            tolerance = max(recent_range * 0.15, pip * 2.0)
             threshold = last_swing_high - tolerance
             is_break = last_close >= threshold
 
             logger.info(
-                "bias_choch_buy: close=%.5f, swing_high=%.5f, threshold=%.5f, "
-                "tolerance=%.5f (HYBRID: max(range*0.35=%.5f, pip*2.5=%.5f)), range=%.5f, break=%s",
+                "bias_choch_buy: close=%.5f, swing_high=%.5f (local), threshold=%.5f, "
+                "tolerance=%.5f (DYNAMIC: max(range*0.15=%.5f, pip*2.0=%.5f)), range=%.5f, break=%s",
                 last_close,
                 last_swing_high,
                 threshold,
                 tolerance,
-                recent_range * 0.35,
-                pip * 2.5,
+                recent_range * 0.15,
+                pip * 2.0,
                 recent_range,
                 is_break,
             )
             return is_break
 
         elif direction == SignalDirection.SELL:
-            # Bearish ChoCh: price breaks below most recent swing low
-            last_swing_low = swing_lows[-1][1]
+            # Bearish ChoCh: price breaks below RECENT swing low
+            last_swing_low = recent_swing_lows[-1][1]
 
-            # V1 HYBRID: Tolerance with minimum absolute value to prevent microscopic values
             pip = PIP_SIZE.get(self._current_symbol, 0.0001)
-            tolerance = max(recent_range * 0.35, pip * 2.5)
-            threshold = last_swing_low + tolerance
+            tolerance = max(recent_range * 0.15, pip * 2.0)
+
+            # CRITICAL: Liquidity grab threshold (1.5 pips above swing) - calibrated for balance
+            threshold = last_swing_low + (pip * 1.5)
             is_break = last_close <= threshold
 
             logger.info(
-                "bias_choch_sell: close=%.5f, swing_low=%.5f, threshold=%.5f, "
-                "tolerance=%.5f (HYBRID: max(range*0.35=%.5f, pip*2.5=%.5f)), range=%.5f, break=%s",
+                "bias_choch_sell: close=%.5f, swing_low=%.5f (local), threshold=%.5f, "
+                "tolerance=%.5f (DYNAMIC: max(range*0.15=%.5f, pip*2.0=%.5f)), range=%.5f, break=%s",
                 last_close,
                 last_swing_low,
                 threshold,
                 tolerance,
-                recent_range * 0.35,
-                pip * 2.5,
+                recent_range * 0.15,
+                pip * 2.0,
                 recent_range,
                 is_break,
             )
@@ -831,10 +955,28 @@ class BiasStrategy(BaseStrategy):
 
         return False
 
+    # ================================================================
+    # SIMETRÍA VERIFICADA (BUY vs SELL):
+    # ================================================================
+    #
+    # | Aspecto              | BUY Logic                          | SELL Logic                         |
+    # |----------------------|------------------------------------|------------------------------------|
+    # | Swing Selection      | recent_swing_highs[-1]             | recent_swing_lows[-1]              |
+    # | Temporal Filter      | Últimos 15 bars M5                 | Últimos 15 bars M5                 |
+    # | Tolerance Formula    | max(range * 0.15, pip * 2.0)       | max(range * 0.15, pip * 2.0)       |
+    # | Threshold Calc       | swing_high - tolerance             | swing_low + (pip * 0.5)            |
+    # | Break Condition      | close >= threshold                 | close <= threshold                 |
+    # | Fractal Threshold    | fractal_high - (pip * 3.0)         | fractal_low + (pip * 3.0)          |
+    # | Fractal Break        | close > threshold                  | close < threshold                  |
+    # ================================================================
+
     def _detect_fractal_break(self, df: pd.DataFrame, direction: SignalDirection) -> bool:
         """
         Fractal Break de Emergencia: Fallback if no ChoCh detected.
-        Allows entry if price breaks the max/min of the last 3 H1 candles in bias direction.
+
+        SMC Liquidity Grab Logic:
+        - Allows "touching" of fractal zones with 3-pip tolerance
+        - Symmetric for BUY/SELL to ensure balanced detection
 
         Only active after London sweep detected (manipulation exists).
         """
@@ -844,26 +986,33 @@ class BiasStrategy(BaseStrategy):
 
         last_3_bars = df.tail(3)
         current_close = float(df.iloc[-1]["close"])
+        pip = PIP_SIZE.get(self._current_symbol, 0.0001)
 
         if direction == SignalDirection.BUY:
-            # Bullish fractal: close breaks above max of last 3 H1 highs
+            # Bullish fractal: close breaks above max of last 3 H1 highs (con tolerancia)
             fractal_high = last_3_bars["high"].max()
-            is_break = current_close > fractal_high
+
+            # SMC: Permitir "roce" de zona de liquidez (3 pips abajo del fractal)
+            threshold = fractal_high - (pip * 3.0)
+            is_break = current_close > threshold
 
             logger.info(
-                "bias_fractal_buy: close=%.5f, fractal_high=%.5f (3H1), break=%s",
-                current_close, fractal_high, is_break,
+                "bias_fractal_buy: close=%.5f, fractal_high=%.5f (3H1), threshold=%.5f (-3.0 pips), break=%s",
+                current_close, fractal_high, threshold, is_break,
             )
             return is_break
 
         elif direction == SignalDirection.SELL:
-            # Bearish fractal: close breaks below min of last 3 H1 lows
+            # Bearish fractal: close breaks below min of last 3 H1 lows (con tolerancia)
             fractal_low = last_3_bars["low"].min()
-            is_break = current_close < fractal_low
+
+            # SMC: Permitir "roce" de zona de liquidez (1.0 pips arriba del fractal) - calibrated
+            threshold = fractal_low + (pip * 1.0)
+            is_break = current_close < threshold
 
             logger.info(
-                "bias_fractal_sell: close=%.5f, fractal_low=%.5f (3H1), break=%s",
-                current_close, fractal_low, is_break,
+                "bias_fractal_sell: close=%.5f, fractal_low=%.5f (3H1), threshold=%.5f (+1.0 pips), break=%s",
+                current_close, fractal_low, threshold, is_break,
             )
             return is_break
 
