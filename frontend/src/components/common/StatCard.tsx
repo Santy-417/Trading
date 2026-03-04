@@ -24,7 +24,7 @@ export default function StatCard({
   value,
   subtitle,
   icon: Icon,
-  color = "#3b82f6",
+  color = "#7c3aed",
   trend,
   sparklineData,
 }: StatCardProps) {

@@ -7,6 +7,11 @@ class TrainRequest(BaseModel):
     bars: int = Field(default=5000, ge=500, le=50000)
     forward_bars: int = Field(default=10, ge=3, le=50)
     model_params: dict | None = None
+    # Date range mode (overrides bars if both date_from and date_to are provided)
+    date_from: str | None = None
+    date_to: str | None = None
+    timezone: str = "America/Bogota"
+    warmup_bars: int = Field(default=200, ge=50, le=500)
 
 
 class ValidateRequest(BaseModel):
@@ -15,6 +20,11 @@ class ValidateRequest(BaseModel):
     timeframe: str = Field(default="H1")
     bars: int = Field(default=5000, ge=500, le=50000)
     n_splits: int = Field(default=5, ge=2, le=10)
+    # Date range mode (overrides bars if both date_from and date_to are provided)
+    date_from: str | None = None
+    date_to: str | None = None
+    timezone: str = "America/Bogota"
+    warmup_bars: int = Field(default=200, ge=50, le=500)
 
 
 class PredictRequest(BaseModel):

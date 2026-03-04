@@ -3,8 +3,8 @@ import "./globals.css";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
-  title: "ForexAI Trading Platform",
-  description: "Professional Forex AI Trading Platform",
+  title: "NextFlow TradingAI",
+  description: "Professional Algorithmic Trading Platform",
 };
 
 export default function RootLayout({

@@ -22,6 +22,8 @@ import {
   Collapse,
   Tabs,
   Tab,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
 import { SelectDropdown } from "@/components/ui/select-dropdown";
 import Grid from "@mui/material/Grid";
@@ -38,6 +40,9 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Info,
+  FileText,
+  Check,
+  Download,
 } from "lucide-react";
 import EquityChart from "@/components/charts/EquityChart";
 import TradeAuditCarousel from "@/components/trading/TradeAuditCarousel";
@@ -234,6 +239,92 @@ export default function BacktestPage() {
     message: string;
     severity: "success" | "error" | "warning";
   }>({ open: false, message: "", severity: "success" });
+
+  const [reportCopied, setReportCopied] = useState(false);
+
+  const generateReport = (r: typeof result): string => {
+    if (!r) return "";
+    const periodLine = r.date_from && r.date_to
+      ? `${r.date_from.split("T")[0]} → ${r.date_to.split("T")[0]}`
+      : `${r.total_bars} bars`;
+    const warmupLine = r.warmup_bars > 0 ? ` (${r.warmup_bars} warmup bars)` : "";
+    const returnPct = r.initial_balance > 0 ? ((r.net_profit / r.initial_balance) * 100).toFixed(2) : "0.00";
+
+    const tradeRows = r.trades.slice(0, 50).map((t, i) =>
+      `| ${i + 1} | ${t.direction} | ${t.entry_time ? t.entry_time.split("T")[0] : "-"} | ${t.entry_price.toFixed(5)} | ${t.exit_price.toFixed(5)} | $${t.profit.toFixed(2)} | ${t.risk_reward.toFixed(2)} |`
+    ).join("\n");
+
+    const londonLine = r.session_analysis
+      ? `- London: ${r.session_analysis.london.trades} trades, P&L: $${r.session_analysis.london.net_profit.toFixed(2)}, Win Rate: ${r.session_analysis.london.win_rate.toFixed(1)}%`
+      : "";
+    const nyLine = r.session_analysis
+      ? `- NY: ${r.session_analysis.ny.trades} trades, P&L: $${r.session_analysis.ny.net_profit.toFixed(2)}, Win Rate: ${r.session_analysis.ny.win_rate.toFixed(1)}%`
+      : "";
+
+    const distLine = r.buy_sell_distribution
+      ? `- BUY: ${r.buy_sell_distribution.buy_count} (${r.buy_sell_distribution.buy_pct.toFixed(1)}%) | SELL: ${r.buy_sell_distribution.sell_count} (${r.buy_sell_distribution.sell_pct.toFixed(1)}%)`
+      : "";
+
+    return `# Backtest Report: ${r.symbol} ${r.timeframe} — ${r.strategy}
+Generated: ${new Date().toISOString().split("T")[0]}
+
+## Configuration
+- Strategy: ${r.strategy}
+- Symbol: ${r.symbol} | Timeframe: ${r.timeframe}
+- Period: ${periodLine}${warmupLine}
+- Initial Balance: $${r.initial_balance.toFixed(2)} | Final Balance: $${r.final_balance.toFixed(2)}
+
+## Performance Summary
+- Net Profit: $${r.net_profit.toFixed(2)} (${returnPct}%)
+- Win Rate: ${r.win_rate.toFixed(2)}% (${r.total_trades} trades: ${r.winning_trades} wins / ${r.losing_trades} losses)
+- Profit Factor: ${r.profit_factor.toFixed(4)}
+- Sharpe Ratio: ${r.sharpe_ratio.toFixed(4)}
+- Max Drawdown: ${(r.max_drawdown_percent ?? 0).toFixed(2)}%
+- Expectancy: $${r.expectancy.toFixed(2)} per trade
+
+## Risk Metrics
+- Sortino Ratio: ${(r.sortino_ratio ?? 0).toFixed(4)}
+- Calmar Ratio: ${(r.calmar_ratio ?? 0).toFixed(4)}
+- VaR 95%: $${(r.var_95 ?? 0).toFixed(2)}
+- CVaR 95%: $${(r.cvar_95 ?? 0).toFixed(2)}
+- Avg Win: $${(r.average_win ?? 0).toFixed(2)} | Avg Loss: $${Math.abs(r.average_loss ?? 0).toFixed(2)}
+- Largest Win: $${r.largest_win.toFixed(2)} | Largest Loss: $${r.largest_loss.toFixed(2)}
+- Max Consecutive Wins: ${r.max_consecutive_wins} | Max Consecutive Losses: ${r.max_consecutive_losses}
+
+## Trade Distribution
+${distLine}
+
+## Session Analysis
+${londonLine}
+${nyLine}
+
+## Trade List (first ${Math.min(r.trades.length, 50)} of ${r.trades.length})
+| # | Type | Entry Date | Entry Price | Exit Price | P&L | R:R |
+|---|------|-----------|-------------|------------|-----|-----|
+${tradeRows}
+${r.trades.length > 50 ? `\n_...and ${r.trades.length - 50} more trades (see JSON export for full list)_` : ""}
+`;
+  };
+
+  const handleCopyReport = async () => {
+    if (!result) return;
+    const report = generateReport(result);
+    await navigator.clipboard.writeText(report);
+    setReportCopied(true);
+    setTimeout(() => setReportCopied(false), 2500);
+  };
+
+  const handleExportJSON = () => {
+    if (!result) return;
+    const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `backtest_${result.symbol}_${result.timeframe}_${dateStr}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const fetchEstimate = useCallback(async () => {
     if (!dateFrom || !dateTo) return;
@@ -485,10 +576,10 @@ export default function BacktestPage() {
                               p: 1.5,
                               borderRadius: 2,
                               bgcolor: "rgba(59, 130, 246, 0.06)",
-                              border: "1px solid rgba(59, 130, 246, 0.12)",
+                              border: "1px solid rgba(124, 58, 237, 0.12)",
                             }}
                           >
-                            <Info size={14} style={{ color: "#3b82f6", flexShrink: 0 }} />
+                            <Info size={14} style={{ color: "#7c3aed", flexShrink: 0 }} />
                             <Typography sx={{ fontSize: 11, color: "#94a3b8" }}>
                               ~{formatNumberWithDots(estimate.estimated_bars, 0)} bars total
                               ({formatNumberWithDots(estimate.warmup_bars, 0)} warmup +{" "}
@@ -561,7 +652,7 @@ export default function BacktestPage() {
                       py: 1.25,
                       fontSize: 13,
                       fontWeight: 600,
-                      bgcolor: compareMode ? "#8b5cf6" : "#3b82f6",
+                      bgcolor: compareMode ? "#4f46e5" : "#7c3aed",
                       "&:hover": {
                         bgcolor: compareMode ? "#7c3aed" : "#2563eb",
                       },
@@ -674,9 +765,51 @@ export default function BacktestPage() {
                 </Grid>
               </Grid>
 
+              {/* Export toolbar */}
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 1 }}>
+                <Tooltip title={reportCopied ? "Copied!" : "Copy AI Report (Markdown)"} arrow>
+                  <IconButton
+                    size="small"
+                    onClick={handleCopyReport}
+                    sx={{
+                      color: reportCopied ? "#22c55e" : "#64748b",
+                      border: "1px solid",
+                      borderColor: reportCopied ? "rgba(34,197,94,0.3)" : "rgba(148,163,184,0.1)",
+                      borderRadius: 1.5,
+                      px: 1.5,
+                      gap: 0.75,
+                      fontSize: 12,
+                      "&:hover": { bgcolor: "rgba(124,58,237,0.06)", borderColor: "rgba(124,58,237,0.2)", color: "#a78bfa" },
+                    }}
+                  >
+                    {reportCopied ? <Check size={14} /> : <FileText size={14} />}
+                    <Typography sx={{ fontSize: 11, fontWeight: 500 }}>
+                      {reportCopied ? "Copied!" : "Copy Report"}
+                    </Typography>
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Export as JSON file" arrow>
+                  <IconButton
+                    size="small"
+                    onClick={handleExportJSON}
+                    sx={{
+                      color: "#64748b",
+                      border: "1px solid rgba(148,163,184,0.1)",
+                      borderRadius: 1.5,
+                      px: 1.5,
+                      gap: 0.75,
+                      "&:hover": { bgcolor: "rgba(124,58,237,0.06)", borderColor: "rgba(124,58,237,0.2)", color: "#a78bfa" },
+                    }}
+                  >
+                    <Download size={14} />
+                    <Typography sx={{ fontSize: 11, fontWeight: 500 }}>Export JSON</Typography>
+                  </IconButton>
+                </Tooltip>
+              </Box>
+
               {/* Strategy info chips */}
               <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                <Chip label={result.strategy} size="small" sx={{ bgcolor: "rgba(59,130,246,0.08)", color: "#3b82f6", border: "1px solid rgba(59,130,246,0.15)", fontSize: 11 }} />
+                <Chip label={result.strategy} size="small" sx={{ bgcolor: "rgba(124,58,237,0.08)", color: "#7c3aed", border: "1px solid rgba(124,58,237,0.15)", fontSize: 11 }} />
                 <Chip label={result.symbol} size="small" sx={{ bgcolor: "rgba(139,92,246,0.08)", color: "#8b5cf6", border: "1px solid rgba(139,92,246,0.15)", fontSize: 11 }} />
                 <Chip label={result.timeframe} size="small" sx={{ bgcolor: "rgba(148,163,184,0.08)", color: "#94a3b8", border: "1px solid rgba(148,163,184,0.12)", fontSize: 11 }} />
                 {dateRangeLabel && (
@@ -965,7 +1098,7 @@ export default function BacktestPage() {
                     mb: 2,
                   }}
                 >
-                  <BarChart3 size={32} style={{ color: "#3b82f6" }} />
+                  <BarChart3 size={32} style={{ color: "#7c3aed" }} />
                 </Box>
                 <Typography
                   sx={{ fontSize: 15, fontWeight: 600, color: "text.primary", mb: 0.5 }}

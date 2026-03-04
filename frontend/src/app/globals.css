@@ -36,33 +36,33 @@
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    --background: 260 43% 5%;
     --foreground: 210 40% 98%;
 
-    --card: 222.2 84% 4.9%;
+    --card: 260 43% 7%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 222.2 84% 4.9%;
+    --popover: 260 43% 7%;
     --popover-foreground: 210 40% 98%;
 
     --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary-foreground: 260 43% 7%;
 
-    --secondary: 217.2 32.6% 17.5%;
+    --secondary: 260 25% 15%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
+    --muted: 260 25% 15%;
     --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 260 25% 15%;
     --accent-foreground: 210 40% 98%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --border: 260 25% 15%;
+    --input: 260 25% 15%;
+    --ring: 263 70% 58%;
   }
 }
 
@@ -73,7 +73,7 @@
 }
 
 body {
-  background: #0f172a;
+  background: #0a0a1a;
   color: #f1f5f9;
   overflow-x: hidden;
 }
@@ -85,14 +85,21 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #1e293b;
+  background: #13112b;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: #3b2d6b;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: #5b4a9e;
+}
+
+/* Liquid glass utility */
+.liquid-glass {
+  backdrop-filter: blur(40px) saturate(1.8);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }

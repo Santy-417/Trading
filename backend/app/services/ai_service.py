@@ -15,7 +15,7 @@ class AIService:
         self.llm = get_llm_client()
         self.trade_analyzer = TradeAnalyzer(self.llm)
         self.risk_review = RiskReview(self.llm)
-        self.performance_summary = PerformanceSummary(self.llm)
+        self._perf_summary = PerformanceSummary(self.llm)
 
     async def analyze_trades(self, trades_data: dict) -> str:
         logger.info("AI analyzing trades")
@@ -36,9 +36,9 @@ class AIService:
     async def performance_summary(self, metrics: dict, period: str = "weekly") -> str:
         logger.info("AI generating %s performance summary", period)
         if period == "monthly":
-            return await self.performance_summary.monthly_report(metrics)
-        return await self.performance_summary.weekly_summary(metrics)
+            return await self._perf_summary.monthly_report(metrics)
+        return await self._perf_summary.weekly_summary(metrics)
 
     async def compare_strategies(self, strategies_data: dict) -> str:
         logger.info("AI comparing strategies: %s", list(strategies_data.keys()))
-        return await self.performance_summary.strategy_comparison(strategies_data)
+        return await self._perf_summary.strategy_comparison(strategies_data)

@@ -52,3 +52,16 @@ async def list_models(
 ):
     service = MLService()
     return {"models": service.list_models()}
+
+
+@router.delete("/models/{model_id}")
+async def delete_model(
+    model_id: str,
+    _user: dict = Depends(get_current_user),
+):
+    service = MLService()
+    deleted = service.delete_model(model_id)
+    if not deleted:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Model not found")
+    return {"deleted": model_id}

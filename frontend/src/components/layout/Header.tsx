@@ -6,14 +6,11 @@ import {
   AppBar,
   Box,
   Chip,
-  IconButton,
   Toolbar,
   Typography,
   Tooltip,
 } from "@mui/material";
-import { LogOut, Clock, Circle } from "lucide-react";
-import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
+import { Clock, Circle } from "lucide-react";
 import { useAppStore } from "@/store";
 
 const PAGE_TITLES: Record<string, string> = {
@@ -53,7 +50,6 @@ function formatTime(date: Date, tz: string): string {
 }
 
 export default function Header() {
-  const router = useRouter();
   const pathname = usePathname();
   const botStatus = useAppStore((s) => s.botStatus);
   const [time, setTime] = useState(new Date());
@@ -62,11 +58,6 @@ export default function Header() {
     const interval = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
-  };
 
   const isRunning = botStatus?.state === "running";
   const pageTitle = PAGE_TITLES[pathname] || "Dashboard";
@@ -131,7 +122,7 @@ export default function Header() {
           />
         </Box>
 
-        {/* Right: Session + Clock + Logout */}
+        {/* Right: Session + Clock */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
           {/* Active session indicator */}
           <Tooltip title={`${session.name} Session Active`} arrow>
@@ -198,20 +189,6 @@ export default function Header() {
               </Typography>
             </Box>
           </Box>
-
-          {/* Logout */}
-          <Tooltip title="Sign out" arrow>
-            <IconButton
-              onClick={handleLogout}
-              size="small"
-              sx={{
-                color: "#64748b",
-                "&:hover": { color: "#ef4444", bgcolor: "rgba(239,68,68,0.08)" },
-              }}
-            >
-              <LogOut size={18} />
-            </IconButton>
-          </Tooltip>
         </Box>
       </Toolbar>
     </AppBar>

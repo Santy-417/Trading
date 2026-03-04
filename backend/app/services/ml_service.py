@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.backtesting.data_loader import DataLoader
@@ -11,6 +13,12 @@ from app.schemas.ml import PredictRequest, TrainRequest, ValidateRequest
 logger = get_logger(__name__)
 
 
+def _parse_datetime(dt_str: str) -> datetime:
+    """Parse ISO datetime string as tz-naive (MT5 data has tz-naive index)."""
+    dt = datetime.fromisoformat(dt_str)
+    return dt.replace(tzinfo=None)
+
+
 class MLService:
     def __init__(self, session: AsyncSession | None = None):
         self.session = session
@@ -18,9 +26,17 @@ class MLService:
     async def train(self, request: TrainRequest) -> dict:
         """Train a new ML model."""
         loader = DataLoader()
-        df = await loader.load_from_mt5(
-            request.symbol, request.timeframe, count=request.bars
-        )
+        if request.date_from and request.date_to:
+            date_from = _parse_datetime(request.date_from)
+            date_to = _parse_datetime(request.date_to)
+            df, _ = await loader.load_with_warmup(
+                request.symbol, request.timeframe,
+                date_from, date_to, request.warmup_bars,
+            )
+        else:
+            df = await loader.load_from_mt5(
+                request.symbol, request.timeframe, count=request.bars
+            )
         df = DataLoader.validate_data(df)
 
         # Build dataset
@@ -52,9 +68,17 @@ class MLService:
     async def validate(self, request: ValidateRequest) -> dict:
         """Walk-forward validate a model."""
         loader = DataLoader()
-        df = await loader.load_from_mt5(
-            request.symbol, request.timeframe, count=request.bars
-        )
+        if request.date_from and request.date_to:
+            date_from = _parse_datetime(request.date_from)
+            date_to = _parse_datetime(request.date_to)
+            df, _ = await loader.load_with_warmup(
+                request.symbol, request.timeframe,
+                date_from, date_to, request.warmup_bars,
+            )
+        else:
+            df = await loader.load_from_mt5(
+                request.symbol, request.timeframe, count=request.bars
+            )
         df = DataLoader.validate_data(df)
 
         builder = DatasetBuilder()
@@ -83,3 +107,7 @@ class MLService:
     def list_models(self) -> list[dict]:
         """List all saved models."""
         return model_registry.list_models()
+
+    def delete_model(self, model_id: str) -> bool:
+        """Delete a model and its metadata."""
+        return model_registry.delete(model_id)

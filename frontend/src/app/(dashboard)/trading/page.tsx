@@ -109,14 +109,14 @@ export default function TradingPage() {
               width: 40,
               height: 40,
               borderRadius: 2,
-              bgcolor: "rgba(59, 130, 246, 0.1)",
-              border: "1px solid rgba(59, 130, 246, 0.15)",
+              bgcolor: "rgba(124, 58, 237, 0.1)",
+              border: "1px solid rgba(124, 58, 237, 0.15)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               fontWeight: 700,
               fontSize: 12,
-              color: "#3b82f6",
+              color: "#7c3aed",
               letterSpacing: "-0.02em",
             }}
           >
@@ -191,7 +191,7 @@ export default function TradingPage() {
             value="--"
             subtitle="No closed trades yet"
             icon={Activity}
-            color="#3b82f6"
+            color="#7c3aed"
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>

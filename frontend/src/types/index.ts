@@ -232,6 +232,7 @@ export interface MLModel {
   timeframe: string;
   created_at: string;
   metrics: Record<string, number>;
+  feature_importance?: Record<string, number>;
 }
 
 // ─── AI Analysis ──────────────────────────────────────

@@ -81,8 +81,11 @@ class ModelRegistry:
         """List all saved models with metadata."""
         models = []
         for meta_file in sorted(self.models_dir.glob("*_meta.json"), reverse=True):
-            with open(meta_file) as f:
-                models.append(json.load(f))
+            try:
+                with open(meta_file) as f:
+                    models.append(json.load(f))
+            except (json.JSONDecodeError, OSError) as e:
+                logger.warning("Skipping corrupted model metadata: %s (%s)", meta_file.name, e)
         return models
 
     def get_latest(self, name: str) -> str | None:

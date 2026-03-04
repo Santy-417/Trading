@@ -8,7 +8,6 @@ import {
   List,
   ListItemButton,
   ListItemIcon,
-  ListItemText,
   Typography,
   Divider,
   Tooltip,
@@ -24,9 +23,11 @@ import {
   FileText,
   Settings,
   ChevronsLeft,
-  ChevronsRight,
+  LogOut,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAppStore } from "@/store";
+import { supabase } from "@/lib/supabase";
 
 const DRAWER_WIDTH_EXPANDED = 240;
 const DRAWER_WIDTH_COLLAPSED = 64;
@@ -44,6 +45,10 @@ const ACCOUNT_NAV = [
   { label: "Settings", path: "/settings", icon: <Settings size={20} /> },
 ];
 
+const VIOLET = "#7c3aed";
+const VIOLET_LIGHT = "rgba(124, 58, 237, 0.1)";
+const VIOLET_BORDER = "rgba(124, 58, 237, 0.15)";
+
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -52,6 +57,11 @@ export default function Sidebar() {
 
   const drawerWidth = collapsed ? DRAWER_WIDTH_COLLAPSED : DRAWER_WIDTH_EXPANDED;
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
+
   const renderItem = (item: {
     label: string;
     path: string;
@@ -59,8 +69,6 @@ export default function Sidebar() {
     badgeKey?: string;
   }) => {
     const isActive = pathname === item.path;
-
-    // Show risk badge when bot is running (circuit breaker could be active)
     const showBadge = item.badgeKey === "risk" && botStatus?.state === "running";
 
     const button = (
@@ -75,12 +83,13 @@ export default function Sidebar() {
           px: collapsed ? 1 : 2,
           position: "relative",
           overflow: "hidden",
+          minHeight: 40,
           ...(isActive
             ? {
-                bgcolor: "rgba(59, 130, 246, 0.08)",
-                color: "#3b82f6",
-                "&:hover": { bgcolor: "rgba(59, 130, 246, 0.12)" },
-                "& .MuiListItemIcon-root": { color: "#3b82f6" },
+                bgcolor: VIOLET_LIGHT,
+                color: "#a78bfa",
+                "&:hover": { bgcolor: "rgba(124, 58, 237, 0.14)" },
+                "& .MuiListItemIcon-root": { color: "#a78bfa" },
                 "&::before": {
                   content: '""',
                   position: "absolute",
@@ -89,63 +98,53 @@ export default function Sidebar() {
                   bottom: "20%",
                   width: 3,
                   borderRadius: "0 4px 4px 0",
-                  bgcolor: "#3b82f6",
+                  bgcolor: VIOLET,
+                  boxShadow: `0 0 8px ${VIOLET}80`,
                 },
               }
             : {
                 color: "text.secondary",
                 "&:hover": {
-                  bgcolor: "rgba(148, 163, 184, 0.06)",
+                  bgcolor: "rgba(139, 92, 246, 0.06)",
                   color: "text.primary",
-                  "& .MuiListItemIcon-root": { color: "text.primary" },
+                  "& .MuiListItemIcon-root": { color: "#a78bfa" },
                 },
               }),
         }}
       >
         <ListItemIcon
           sx={{
-            minWidth: collapsed ? 0 : 40,
-            color: isActive ? "#3b82f6" : "text.secondary",
+            minWidth: collapsed ? 0 : 36,
+            color: isActive ? "#a78bfa" : "text.secondary",
             transition: "color 0.15s",
+            justifyContent: "center",
           }}
         >
           {item.icon}
         </ListItemIcon>
-        {!collapsed && (
-          <ListItemText
-            primary={item.label}
-            primaryTypographyProps={{
-              fontSize: 13,
-              fontWeight: isActive ? 600 : 400,
-              letterSpacing: "0.01em",
-            }}
-          />
-        )}
+
+        <AnimatePresence initial={false}>
+          {!collapsed && (
+            <motion.div
+              key="label"
+              initial={{ opacity: 0, width: 0 }}
+              animate={{ opacity: 1, width: "auto" }}
+              exit={{ opacity: 0, width: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              style={{ overflow: "hidden", whiteSpace: "nowrap" }}
+            >
+              <Typography sx={{ fontSize: 13, fontWeight: isActive ? 600 : 400, letterSpacing: "0.01em", ml: 0.5 }}>
+                {item.label}
+              </Typography>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {showBadge && !collapsed && (
-          <Box
-            sx={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              bgcolor: "#22c55e",
-              boxShadow: "0 0 8px rgba(34,197,94,0.5)",
-              flexShrink: 0,
-            }}
-          />
+          <Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: "#22c55e", boxShadow: "0 0 8px rgba(34,197,94,0.5)", flexShrink: 0, ml: "auto" }} />
         )}
         {showBadge && collapsed && (
-          <Box
-            sx={{
-              position: "absolute",
-              top: 8,
-              right: 8,
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              bgcolor: "#22c55e",
-              boxShadow: "0 0 8px rgba(34,197,94,0.5)",
-            }}
-          />
+          <Box sx={{ position: "absolute", top: 8, right: 8, width: 6, height: 6, borderRadius: "50%", bgcolor: "#22c55e", boxShadow: "0 0 8px rgba(34,197,94,0.5)" }} />
         )}
       </ListItemButton>
     );
@@ -158,7 +157,7 @@ export default function Sidebar() {
       );
     }
 
-    return button;
+    return <div key={item.path}>{button}</div>;
   };
 
   return (
@@ -167,12 +166,13 @@ export default function Sidebar() {
       sx={{
         width: drawerWidth,
         flexShrink: 0,
+        transition: "width 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
         "& .MuiDrawer-paper": {
           width: drawerWidth,
-          transition: "width 0.3s ease-in-out",
+          transition: "width 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
           boxSizing: "border-box",
           bgcolor: "background.paper",
-          borderRight: "1px solid rgba(148, 163, 184, 0.08)",
+          borderRight: `1px solid ${VIOLET_BORDER}`,
           overflow: "hidden",
         },
       }}
@@ -185,6 +185,7 @@ export default function Sidebar() {
           alignItems: "center",
           gap: 1.5,
           justifyContent: collapsed ? "center" : "flex-start",
+          minHeight: 64,
         }}
       >
         <Box
@@ -195,189 +196,191 @@ export default function Sidebar() {
             width: 36,
             height: 36,
             borderRadius: 2,
-            bgcolor: "rgba(59, 130, 246, 0.1)",
-            border: "1px solid rgba(59, 130, 246, 0.15)",
+            bgcolor: VIOLET_LIGHT,
+            border: `1px solid ${VIOLET_BORDER}`,
+            boxShadow: `0 0 12px ${VIOLET}20`,
             flexShrink: 0,
           }}
         >
-          <TrendingUp size={20} style={{ color: "#3b82f6" }} />
+          <AnimatePresence mode="wait" initial={false}>
+            {collapsed ? (
+              <motion.div
+                key="nf"
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7 }}
+                transition={{ duration: 0.15 }}
+              >
+                <Typography sx={{ fontSize: 13, fontWeight: 800, color: "#a78bfa", letterSpacing: "-0.02em", lineHeight: 1 }}>
+                  NF
+                </Typography>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="icon"
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7 }}
+                transition={{ duration: 0.15 }}
+              >
+                <TrendingUp size={20} style={{ color: "#a78bfa" }} />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </Box>
-        {!collapsed && (
-          <Box>
-            <Typography
-              variant="h6"
-              sx={{ lineHeight: 1.2, fontSize: 16, fontWeight: 700 }}
+
+        <AnimatePresence initial={false}>
+          {!collapsed && (
+            <motion.div
+              key="brand"
+              initial={{ opacity: 0, width: 0 }}
+              animate={{ opacity: 1, width: "auto" }}
+              exit={{ opacity: 0, width: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              style={{ overflow: "hidden" }}
             >
-              ForexAI
-            </Typography>
-            <Typography
-              variant="caption"
-              sx={{ color: "#64748b", fontSize: 10, letterSpacing: "0.05em" }}
-            >
-              Trading Platform
-            </Typography>
-          </Box>
-        )}
+              <Box sx={{ whiteSpace: "nowrap" }}>
+                <Typography variant="h6" sx={{ lineHeight: 1.2, fontSize: 16, fontWeight: 700, color: "#e2d5ff" }}>
+                  NextFlow
+                </Typography>
+                <Typography variant="caption" sx={{ color: VIOLET, fontSize: 10, letterSpacing: "0.08em", fontWeight: 600 }}>
+                  TradingAI
+                </Typography>
+              </Box>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </Box>
 
-      <Divider sx={{ borderColor: "rgba(148,163,184,0.08)", mx: 1.5 }} />
+      <Divider sx={{ borderColor: VIOLET_BORDER, mx: 1.5 }} />
 
-      {/* Main Navigation */}
-      {!collapsed && (
-        <Typography
-          variant="overline"
-          sx={{
-            px: 3,
-            pt: 2,
-            pb: 0.5,
-            display: "block",
-            color: "#64748b",
-            fontSize: 10,
-            fontWeight: 600,
-            letterSpacing: 1.5,
-          }}
-        >
-          NAVIGATION
-        </Typography>
-      )}
+      {/* Main Navigation label */}
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            key="nav-label"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.18 }}
+            style={{ overflow: "hidden" }}
+          >
+            <Typography variant="overline" sx={{ px: 3, pt: 2, pb: 0.5, display: "block", color: "#5b4a9e", fontSize: 10, fontWeight: 600, letterSpacing: 1.5 }}>
+              NAVIGATION
+            </Typography>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <List sx={{ px: 1.5, pt: collapsed ? 1.5 : 0 }}>
         {MAIN_NAV.map(renderItem)}
       </List>
 
       {/* ACCOUNT Section */}
       <Box sx={{ mt: "auto" }}>
-        <Divider sx={{ borderColor: "rgba(148,163,184,0.08)", mx: 1.5 }} />
+        <Divider sx={{ borderColor: VIOLET_BORDER, mx: 1.5 }} />
 
-        {!collapsed && (
-          <Typography
-            variant="overline"
-            sx={{
-              px: 3,
-              pt: 1.5,
-              pb: 0.5,
-              display: "block",
-              color: "#64748b",
-              fontSize: 10,
-              fontWeight: 600,
-              letterSpacing: 1.5,
-            }}
-          >
-            ACCOUNT
-          </Typography>
-        )}
+        <AnimatePresence initial={false}>
+          {!collapsed && (
+            <motion.div
+              key="acct-label"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.18 }}
+              style={{ overflow: "hidden" }}
+            >
+              <Typography variant="overline" sx={{ px: 3, pt: 1.5, pb: 0.5, display: "block", color: "#5b4a9e", fontSize: 10, fontWeight: 600, letterSpacing: 1.5 }}>
+                ACCOUNT
+              </Typography>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <List sx={{ px: 1.5, pt: collapsed ? 1 : 0 }}>
           {ACCOUNT_NAV.map(renderItem)}
         </List>
 
-        {/* User avatar + Demo badge */}
-        {!collapsed && (
-          <Box
-            sx={{
-              px: 2,
-              py: 1.5,
-              mx: 1.5,
-              mb: 1,
-              borderRadius: 2,
-              bgcolor: "rgba(148, 163, 184, 0.04)",
-              display: "flex",
-              alignItems: "center",
-              gap: 1.5,
-            }}
-          >
-            <Avatar
-              sx={{
-                width: 32,
-                height: 32,
-                bgcolor: "rgba(59, 130, 246, 0.15)",
-                color: "#3b82f6",
-                fontSize: 13,
-                fontWeight: 600,
-              }}
+        {/* User avatar */}
+        <AnimatePresence initial={false} mode="wait">
+          {!collapsed ? (
+            <motion.div
+              key="user-expanded"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
             >
-              ST
-            </Avatar>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography
-                variant="body2"
-                sx={{ fontSize: 12, fontWeight: 500, lineHeight: 1.3 }}
-              >
-                Santiago
-              </Typography>
-              <Chip
-                label="Demo"
-                size="small"
-                sx={{
-                  height: 16,
-                  fontSize: 9,
-                  fontWeight: 600,
-                  letterSpacing: "0.05em",
-                  bgcolor: "rgba(245, 158, 11, 0.1)",
-                  color: "#f59e0b",
-                  border: "1px solid rgba(245, 158, 11, 0.2)",
-                  mt: 0.25,
-                }}
-              />
-            </Box>
-          </Box>
-        )}
+              <Box sx={{ px: 2, py: 1.5, mx: 1.5, mb: 0.5, borderRadius: 2, bgcolor: "rgba(124,58,237,0.04)", border: `1px solid ${VIOLET_BORDER}`, display: "flex", alignItems: "center", gap: 1.5 }}>
+                <Avatar sx={{ width: 32, height: 32, bgcolor: VIOLET_LIGHT, color: "#a78bfa", fontSize: 13, fontWeight: 600 }}>ST</Avatar>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" sx={{ fontSize: 12, fontWeight: 500, lineHeight: 1.3 }}>Santiago</Typography>
+                  <Chip label="Demo" size="small" sx={{ height: 16, fontSize: 9, fontWeight: 600, letterSpacing: "0.05em", bgcolor: VIOLET_LIGHT, color: "#a78bfa", border: `1px solid ${VIOLET_BORDER}`, mt: 0.25 }} />
+                </Box>
+              </Box>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="user-collapsed"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              <Box sx={{ display: "flex", justifyContent: "center", mb: 0.5 }}>
+                <Tooltip title="Santiago (Demo)" placement="right" arrow>
+                  <Avatar sx={{ width: 32, height: 32, bgcolor: VIOLET_LIGHT, color: "#a78bfa", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>ST</Avatar>
+                </Tooltip>
+              </Box>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {collapsed && (
-          <Box sx={{ display: "flex", justifyContent: "center", mb: 1 }}>
-            <Tooltip title="Santiago (Demo)" placement="right" arrow>
-              <Avatar
-                sx={{
-                  width: 32,
-                  height: 32,
-                  bgcolor: "rgba(59, 130, 246, 0.15)",
-                  color: "#3b82f6",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                ST
-              </Avatar>
+        {/* Sign Out */}
+        <Box sx={{ px: 1.5, mb: 0.5 }}>
+          {collapsed ? (
+            <Tooltip title="Sign Out" placement="right" arrow>
+              <ListItemButton onClick={handleLogout} sx={{ borderRadius: 2, justifyContent: "center", px: 1, color: "#64748b", "&:hover": { bgcolor: "rgba(239,68,68,0.08)", color: "#ef4444" } }}>
+                <ListItemIcon sx={{ minWidth: 0, color: "inherit", justifyContent: "center" }}>
+                  <LogOut size={18} />
+                </ListItemIcon>
+              </ListItemButton>
             </Tooltip>
-          </Box>
-        )}
+          ) : (
+            <ListItemButton onClick={handleLogout} sx={{ borderRadius: 2, px: 2, color: "#64748b", "&:hover": { bgcolor: "rgba(239,68,68,0.08)", color: "#ef4444", "& .MuiListItemIcon-root": { color: "#ef4444" } } }}>
+              <ListItemIcon sx={{ minWidth: 36, color: "inherit" }}>
+                <LogOut size={18} />
+              </ListItemIcon>
+              <AnimatePresence initial={false}>
+                {!collapsed && (
+                  <motion.div initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: "auto" }} exit={{ opacity: 0, width: 0 }} transition={{ duration: 0.18 }} style={{ overflow: "hidden", whiteSpace: "nowrap" }}>
+                    <Typography sx={{ fontSize: 13 }}>Sign Out</Typography>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </ListItemButton>
+          )}
+        </Box>
 
         {/* Collapse toggle */}
         <Box sx={{ px: 1.5, pb: 1.5 }}>
-          <Tooltip
-            title={collapsed ? "Expand" : ""}
-            placement="right"
-            arrow
-            disableHoverListener={!collapsed}
-          >
+          <Tooltip title={collapsed ? "Expand sidebar" : ""} placement="right" arrow disableHoverListener={!collapsed}>
             <ListItemButton
               onClick={() => setCollapsed(!collapsed)}
-              sx={{
-                borderRadius: 2,
-                justifyContent: collapsed ? "center" : "flex-start",
-                px: collapsed ? 1 : 2,
-                color: "#64748b",
-                "&:hover": {
-                  bgcolor: "rgba(148, 163, 184, 0.06)",
-                  color: "text.primary",
-                },
-              }}
+              sx={{ borderRadius: 2, justifyContent: collapsed ? "center" : "flex-start", px: collapsed ? 1 : 2, color: "#5b4a9e", "&:hover": { bgcolor: VIOLET_LIGHT, color: "#a78bfa" } }}
             >
-              <ListItemIcon
-                sx={{ minWidth: collapsed ? 0 : 40, color: "inherit" }}
-              >
-                {collapsed ? (
-                  <ChevronsRight size={18} />
-                ) : (
+              <ListItemIcon sx={{ minWidth: collapsed ? 0 : 36, color: "inherit", justifyContent: "center" }}>
+                <motion.div animate={{ rotate: collapsed ? 180 : 0 }} transition={{ duration: 0.25, ease: "easeInOut" }}>
                   <ChevronsLeft size={18} />
-                )}
+                </motion.div>
               </ListItemIcon>
-              {!collapsed && (
-                <ListItemText
-                  primary="Collapse"
-                  primaryTypographyProps={{ fontSize: 13 }}
-                />
-              )}
+              <AnimatePresence initial={false}>
+                {!collapsed && (
+                  <motion.div initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: "auto" }} exit={{ opacity: 0, width: 0 }} transition={{ duration: 0.18 }} style={{ overflow: "hidden", whiteSpace: "nowrap" }}>
+                    <Typography sx={{ fontSize: 13 }}>Collapse</Typography>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </ListItemButton>
           </Tooltip>
         </Box>

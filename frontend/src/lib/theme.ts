@@ -5,14 +5,14 @@ import { createTheme } from "@mui/material/styles";
 const theme = createTheme({
   palette: {
     mode: "dark",
-    primary: { main: "#3b82f6" },
-    secondary: { main: "#8b5cf6" },
+    primary: { main: "#7c3aed" },
+    secondary: { main: "#4f46e5" },
     success: { main: "#22c55e" },
     error: { main: "#ef4444" },
     warning: { main: "#f59e0b" },
     background: {
-      default: "#0f172a",
-      paper: "#1e293b",
+      default: "#0a0a1a",
+      paper: "#13112b",
     },
     text: {
       primary: "#f1f5f9",
@@ -31,7 +31,9 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: "none",
-          border: "1px solid rgba(148, 163, 184, 0.1)",
+          border: "1px solid rgba(139, 92, 246, 0.08)",
+          backdropFilter: "blur(12px)",
+          background: "rgba(19, 17, 43, 0.8)",
         },
       },
     },

@@ -101,7 +101,7 @@ class ModelTrainer:
         classifier = self.pipeline.named_steps["classifier"]
         importances = classifier.feature_importances_
 
-        importance_dict = dict(zip(feature_cols, importances))
+        importance_dict = {col: float(imp) for col, imp in zip(feature_cols, importances)}
         # Sort by importance descending
         return dict(sorted(importance_dict.items(), key=lambda x: x[1], reverse=True))
 

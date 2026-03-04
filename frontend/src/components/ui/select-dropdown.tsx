@@ -51,6 +51,8 @@ export function SelectDropdown({
         className="p-0 w-[var(--radix-popover-trigger-width)]"
         align="start"
         sideOffset={4}
+        avoidCollisions={true}
+        collisionPadding={8}
       >
         {label && (
           <div className="border-b border-border px-3 py-2">
@@ -59,7 +61,7 @@ export function SelectDropdown({
             </p>
           </div>
         )}
-        <div className="p-1">
+        <div className="max-h-[280px] overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
           {options.map((option) => {
             const isSelected = option.id === value;
             return (
