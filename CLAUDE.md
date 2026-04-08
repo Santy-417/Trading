@@ -51,18 +51,26 @@ backend/app/
 ├── main.py                 # FastAPI app + lifespan + global exception handler
 ├── core/                   # Config, security (JWT), logging, rate limiting, middleware
 ├── routers/                # API endpoints: health, bot, orders, metrics, backtest, ml, ai
-├── services/               # Business logic: bot, orders, metrics, backtest, ml, ai
+├── services/               # Business logic: bot, orders, metrics, backtest, ml, ai, data_pipeline
 ├── repositories/           # Data access: trade CRUD, audit log persistence
-├── models/                 # SQLAlchemy ORM: trade, bot_config, risk_event, audit_log, ml_model
+├── models/                 # SQLAlchemy ORM: trade, bot_config, risk_event, audit_log, ml_model, ohlcv_bar
 ├── schemas/                # Pydantic request/response schemas per domain
 ├── strategies/             # Trading strategies: bias (SMC V1), fibonacci, ict, manual, hybrid_ml
 ├── risk/                   # Risk engine: risk_manager, lot_calculator, circuit_breaker, kill_switch
-├── execution/              # Orchestrates: signal → risk check → MT5 execution
+├── execution/              # Orchestrates: signal → risk check → MT5 execution (crash monitoring + backoff)
 ├── backtesting/            # Engine, simulator (spread/commission/slippage), metrics, optimizer
 ├── ml/                     # Feature engineering, SMC feature extractor, dataset builder, XGBoost training
 ├── ai_analysis/            # LLM client (abstraction), trade analyzer, risk review, reports
 ├── tasks/                  # Celery: backtest + ML background jobs
 └── integrations/           # MT5 client (connect, orders, positions, history), Supabase client
+
+backend/scripts/
+├── download_historical_data.py  # Bulk-download OHLCV bars (EURUSD/XAUUSD H1+M15, 2-5 years) into ohlcv_bars table
+└── migrate_models_to_storage.py # One-shot migration: local ML pickle files → Supabase Storage bucket
+
+backend/alembic/versions/
+├── 002_bot_config_crash_monitoring.py  # Adds error_state, last_error, last_heartbeat, crash_count to bot_config
+└── 003_ohlcv_bars.py                   # Creates ohlcv_bars table with unique constraint + indexes
 ```
 
 ## Trading Strategies
@@ -97,12 +105,19 @@ Fixed critical bug where strategy executed 100% BUY trades (210 BUY, 0 SELL on 1
 **Parameters:**
 ```python
 BiasStrategy(
-    entropy_threshold=3.1,           # Shannon entropy filter
-    choch_lookback=60,               # M5 bars for ChoCh detection (configurable, not hardcoded)
-    london_start_hour=2,             # 02:00 Bogotá (07:00 UTC)
-    ny_start_hour=8, ny_end_hour=14, # 08:00-14:00 Bogotá
-    min_rr=1.3,                      # Minimum risk-reward ratio (optimized Feb 2026)
+    model_id=None,                   # ML model ID for confidence filtering (str | None)
+    min_ml_confidence=0.65,          # ML confidence threshold (skips trade if below)
     sl_pips_base=10.0,               # Base stop loss in pips
+    min_rr=1.3,                      # Minimum risk-reward ratio (optimized Feb 2026)
+    london_start_hour=2,             # 02:00 Bogotá (07:00 UTC)
+    london_end_hour=11,              # 11:30 Bogotá
+    ny_start_hour=8, ny_end_hour=14, # 08:00-14:00 Bogotá
+    choch_lookback=60,               # M5 bars for ChoCh detection (configurable, not hardcoded)
+    entropy_threshold=3.1,           # Shannon entropy filter
+    use_entropy_zscore=True,         # Z-score normalization for entropy
+    entropy_window=50,               # Entropy calculation window (bars)
+    fvg_lookback=30,                 # Fair Value Gap lookback bars
+    sweep_tolerance_pips=3.0,        # PDH/PDL sweep detection tolerance (near-miss allowance)
 )
 ```
 
@@ -157,11 +172,11 @@ frontend/src/
 ├── components/
 │   ├── layout/             # Sidebar (avatar, tooltips, risk badge), Header (breadcrumb, dual clock, session indicator), AppShell
 │   ├── charts/             # EquityChart (balance reference line, custom tooltip with P&L + drawdown)
-│   ├── trading/            # TradePanel, BotControl, ManualTradeForm, PositionsTable, TradeAuditCarousel
+│   ├── trading/            # TradePanel, BotControl, ManualTradeForm, PositionsTable, TradeAuditCarousel, BotActivityLog, AccountOverview
 │   ├── common/             # StatCard (sparkline background, semantic colors, subtitles)
 │   └── ui/                 # FormattedNumberInput, SelectDropdown, Button, Avatar, Popover
 ├── lib/                    # api.ts (Axios+JWT), supabase.ts, theme.ts, utils.ts, numberFormat.ts
-├── store/                  # Zustand (bot status, positions, metrics)
+├── store/                  # Zustand: botStatus, positions, pendingOrders, metrics, accountInfo, sidebarOpen, activeSymbol (default: "EURUSD"), loading
 └── types/                  # TypeScript interfaces for all API types
 ```
 
@@ -179,20 +194,22 @@ frontend/src/
 - **EquityChart:** Initial balance ReferenceLine, custom tooltip (equity + P&L + drawdown), return % chip, date range subtitle
 
 **Color Palette:**
-- Primary: #3b82f6 (Blue) | Secondary: #8b5cf6 (Violet)
+- Primary: #7c3aed (Violet) | Secondary: #4f46e5 (Indigo)
 - Profit: #22c55e (Green) | Loss: #ef4444 (Red) | Warning: #f59e0b (Amber)
-- Background: #0f172a (Slate-950) | Card: #1e293b (Slate-800)
+- Background: #0a0a1a (default) | Card/Paper: #13112b
 - Text: #f1f5f9 (Primary) | #94a3b8 (Secondary) | #64748b (Muted)
 
-## Tests (51 tests)
+## Tests (~115 tests)
 
 ```
 backend/tests/
-├── conftest.py              # Test environment variables setup
-├── test_risk_manager.py     # Lot calculator, kill switch, circuit breaker, risk manager
-├── test_strategies.py       # Strategy registry, trade signals, manual/fibonacci/ICT strategies
-├── test_backtesting.py      # Metrics, simulator, backtest engine
-└── test_ml.py               # Feature engineering, dataset builder, model trainer
+├── conftest.py                  # Test environment variables setup
+├── test_risk_manager.py         # 4 classes — LotCalculator, KillSwitch, CircuitBreaker, RiskManager (20 tests)
+├── test_bias_strategy.py        # 10 classes — BiasRegistration, DailyBias, Entropy, FVG, ChoCh, MLFilter, NewsFilter (25 tests)
+├── test_backtesting.py          # 4 classes — Metrics, Simulator, BacktestEngine, Hardening (18 tests)
+├── test_ml.py                   # 3 classes — FeatureEngineering, DatasetBuilder, ModelTrainer (9 tests)
+├── test_strategies.py           # 5 classes — StrategyRegistry, TradeSignal, Manual, Fibonacci, ICT (13 tests)
+└── test_execution_engine.py     # 7 classes — SignalFlow (BUY/SELL), RiskGates, LoopResilience, CrashMonitoring, NoSignal (30 tests)
 ```
 
 ## API Endpoints
@@ -203,21 +220,30 @@ backend/tests/
 | POST | `/api/v1/bot/start` | Start trading bot |
 | POST | `/api/v1/bot/stop` | Stop trading bot |
 | POST | `/api/v1/bot/kill` | Kill switch (emergency stop) |
+| POST | `/api/v1/bot/reset-kill` | Reset kill switch and circuit breaker |
+| GET | `/api/v1/bot/account` | MT5 account info (balance, equity, margin, leverage) |
+| GET | `/api/v1/bot/logs` | Bot activity logs (limit 50–200) |
 | GET | `/api/v1/bot/status` | Bot status |
 | POST | `/api/v1/orders/market` | Place market order |
 | POST | `/api/v1/orders/limit` | Place limit order |
 | POST | `/api/v1/orders/close` | Close position |
+| POST | `/api/v1/orders/modify` | Modify SL/TP or partial close on position |
+| POST | `/api/v1/orders/cancel` | Cancel pending order |
+| GET | `/api/v1/orders/pending` | List pending orders |
+| GET | `/api/v1/orders/symbol-info` | Symbol info (bid/ask, stops level) |
 | GET | `/api/v1/orders/open` | List open positions |
 | GET | `/api/v1/orders/history` | Trade history (DB first, MT5 fallback) |
 | GET | `/api/v1/metrics/performance` | Performance metrics |
 | GET | `/api/v1/metrics/equity-curve` | Equity curve data |
 | POST | `/api/v1/backtest/run` | Run backtest |
+| POST | `/api/v1/backtest/estimate` | Estimate bar count for a date range |
 | POST | `/api/v1/backtest/optimize` | Optimize parameters |
 | GET | `/api/v1/backtest/results` | Historical backtest results |
 | POST | `/api/v1/ml/train` | Train ML model |
 | POST | `/api/v1/ml/validate` | Walk-forward validation |
 | POST | `/api/v1/ml/predict` | Get ML prediction |
 | GET | `/api/v1/ml/models` | List saved models |
+| DELETE | `/api/v1/ml/models/{model_id}` | Delete ML model by ID |
 | POST | `/api/v1/ai/analyze-trades` | AI trade pattern analysis |
 | POST | `/api/v1/ai/explain-drawdown` | AI drawdown explanation |
 | POST | `/api/v1/ai/suggest-parameters` | AI parameter suggestions |

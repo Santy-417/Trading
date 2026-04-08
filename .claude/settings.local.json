@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /c/Users/santi/Desktop/Trading/backend/tests/*.py)",
+      "Bash(wc -l /c/Users/santi/Desktop/Trading/backend/app/**/*.py)",
+      "Bash(alembic current:*)"
+    ]
+  }
+}

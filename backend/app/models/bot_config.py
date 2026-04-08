@@ -1,6 +1,7 @@
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Numeric, String
+from sqlalchemy import Boolean, DateTime, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,3 +29,11 @@ class BotConfig(Base, UUIDMixin, TimestampMixin):
     )
     max_trades_per_hour: Mapped[int] = mapped_column(default=10)
     strategy_params: Mapped[dict] = mapped_column(JSONB, default={})
+
+    # Crash monitoring fields
+    error_state: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_heartbeat: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    crash_count: Mapped[int] = mapped_column(Integer, default=0)

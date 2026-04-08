@@ -52,6 +52,9 @@ Professional-grade automated Forex trading platform running locally on Windows w
 - Background tasks with Celery + Redis
 - Full audit logging with commission/swap tracking
 - Trade history with MT5 fallback when database is empty
+- **OHLCV Data Pipeline:** Persisted historical bars in `ohlcv_bars` table (MT5 primary + yfinance fallback), idempotent batch inserts, coverage stats
+- **Crash Monitoring:** ExecutionEngine persists heartbeat, error state, crash count, and full traceback to DB; exponential backoff (5s → 10s → 30s) on failures without stopping the main loop
+- **Cloud ML Storage:** ML models stored in Supabase Storage bucket with local filesystem fallback; transparent migration via `migrate_models_to_storage.py`
 
 ## Dashboard Pages
 
@@ -139,6 +142,48 @@ Development was completed in 3 phases + V1 optimization + UI redesign:
 3. Frontend (Next.js 14 + Material UI) + AI Analysis (OpenAI)
 4. **BiasStrategy V1 Optimization** - Smart Money Concepts refinement + SELL trade surgery + min_rr optimization (Feb 2026)
 5. **UI/UX Redesign** - Professional trading interface: glassmorphism login, session-aware header, hero metrics, collapsible backtest form, enhanced equity chart (Mar 2026)
+6. **Production Hardening** - OHLCV data pipeline, crash monitoring with exponential backoff, Supabase Storage for ML models (Apr 2026)
+
+## API Reference
+
+Full interactive docs at `http://localhost:8000/docs` (Swagger UI, available in dev mode).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/health` | Health check |
+| POST | `/api/v1/bot/start` | Start trading bot |
+| POST | `/api/v1/bot/stop` | Stop trading bot |
+| POST | `/api/v1/bot/kill` | Kill switch (emergency stop) |
+| POST | `/api/v1/bot/reset-kill` | Reset kill switch and circuit breaker |
+| GET | `/api/v1/bot/account` | MT5 account info (balance, equity, margin, leverage) |
+| GET | `/api/v1/bot/logs` | Bot activity logs (limit 50–200) |
+| GET | `/api/v1/bot/status` | Bot status |
+| POST | `/api/v1/orders/market` | Place market order |
+| POST | `/api/v1/orders/limit` | Place limit order |
+| POST | `/api/v1/orders/close` | Close position |
+| POST | `/api/v1/orders/modify` | Modify SL/TP or partial close on position |
+| POST | `/api/v1/orders/cancel` | Cancel pending order |
+| GET | `/api/v1/orders/pending` | List pending orders |
+| GET | `/api/v1/orders/symbol-info` | Symbol info (bid/ask, stops level) |
+| GET | `/api/v1/orders/open` | List open positions |
+| GET | `/api/v1/orders/history` | Trade history (DB first, MT5 fallback) |
+| GET | `/api/v1/metrics/performance` | Performance metrics |
+| GET | `/api/v1/metrics/equity-curve` | Equity curve data |
+| POST | `/api/v1/backtest/run` | Run backtest |
+| POST | `/api/v1/backtest/estimate` | Estimate bar count for a date range |
+| POST | `/api/v1/backtest/optimize` | Optimize parameters |
+| GET | `/api/v1/backtest/results` | Historical backtest results |
+| POST | `/api/v1/ml/train` | Train ML model |
+| POST | `/api/v1/ml/validate` | Walk-forward validation |
+| POST | `/api/v1/ml/predict` | Get ML prediction |
+| GET | `/api/v1/ml/models` | List saved models |
+| DELETE | `/api/v1/ml/models/{model_id}` | Delete ML model by ID |
+| POST | `/api/v1/ai/analyze-trades` | AI trade pattern analysis |
+| POST | `/api/v1/ai/explain-drawdown` | AI drawdown explanation |
+| POST | `/api/v1/ai/suggest-parameters` | AI parameter suggestions |
+| POST | `/api/v1/ai/risk-review` | AI risk anomaly review |
+| POST | `/api/v1/ai/performance-summary` | AI performance report |
+| POST | `/api/v1/ai/compare-strategies` | AI strategy comparison |
 
 ## Quick Start
 
@@ -194,7 +239,7 @@ Dashboard available at `http://localhost:3000`
 
 ```bash
 cd backend
-pytest tests/ -v    # 51 unit tests
+pytest tests/ -v    # ~115 unit tests
 ```
 
 ## Project Structure
@@ -206,19 +251,20 @@ Trading/
 │   │   ├── main.py              # FastAPI app assembly
 │   │   ├── core/                # Config, security, middleware, rate limiting, logging
 │   │   ├── routers/             # API endpoints (health, bot, orders, metrics, backtest, ml, ai)
-│   │   ├── services/            # Business logic layer
+│   │   │   ├── services/            # Business logic layer (bot, order, metrics, backtest, ml, ai, data_pipeline)
 │   │   ├── repositories/        # Data access layer
-│   │   ├── models/              # SQLAlchemy ORM models
+│   │   ├── models/              # SQLAlchemy ORM models (trade, bot_config, ohlcv_bar, ml_model, ...)
 │   │   ├── schemas/             # Pydantic request/response schemas
 │   │   ├── strategies/          # Trading strategies (bias SMC V1, fibonacci, ict, manual, hybrid_ml)
 │   │   ├── risk/                # Risk engine (circuit breaker, kill switch, lot calculator)
-│   │   ├── execution/           # Execution engine (signal → risk → MT5)
+│   │   │   ├── execution/           # Execution engine (signal → risk → MT5, crash monitoring)
 │   │   ├── backtesting/         # Backtesting engine + metrics + simulator
 │   │   ├── ml/                  # XGBoost ML pipeline + feature engineering + SMC extractor
 │   │   ├── ai_analysis/         # LLM-powered trade analysis (OpenAI)
 │   │   ├── tasks/               # Celery background tasks
 │   │   └── integrations/        # MT5 client, Supabase client
-│   ├── tests/                   # 51 unit tests
+│   ├── scripts/                 # Utility scripts (download_historical_data.py, migrate_models_to_storage.py)
+│   ├── tests/                   # ~115 unit tests (7 files)
 │   ├── requirements.txt
 │   └── .env.example
 ├── frontend/
@@ -262,11 +308,12 @@ For detailed file-by-file documentation, see [CLAUDE.md](CLAUDE.md).
 - [x] Phase 3: Frontend (Next.js 14 + Material UI) + AI Analysis (OpenAI)
 - [x] Phase 4: BiasStrategy V1 Optimization + SELL Trade Surgery (Feb 2026)
 - [x] Phase 5: UI/UX Redesign - Professional trading interface (Mar 2026)
+- [x] Phase 6: OHLCV Data Pipeline + Crash Monitoring + Cloud ML Storage (Apr 2026)
 
 ## Testing & Development
 
 ```bash
-# Run all tests (51 total)
+# Run all tests (~115 total)
 pytest tests/ -v
 
 # Run specific test module

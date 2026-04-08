@@ -1,11 +1,16 @@
 import asyncio
+import traceback
 from collections import deque
 from datetime import datetime, timezone
 from enum import Enum
 
+from sqlalchemy import update as sa_update
+
 from app.core.logging_config import get_logger
 from app.execution.news_filter import news_filter
 from app.integrations.metatrader.mt5_client import MT5Client, OrderType, Timeframe, mt5_client
+from app.integrations.supabase.client import _get_session_factory
+from app.models.bot_config import BotConfig
 from app.risk.risk_manager import RiskManager, risk_manager
 from app.strategies import get_strategy
 from app.strategies.base import BaseStrategy, SignalDirection, TradeSignal
@@ -149,22 +154,75 @@ class ExecutionEngine:
         return result
 
     async def _run_loop(self) -> None:
-        """Main trading loop."""
+        """Main trading loop with crash monitoring and exponential backoff retry."""
+        _RETRY_DELAYS = [5, 10, 30]  # seconds: first crash, second, third+
+        retry_count = 0
         self._time_close_done_today = False
+
         while self._state == BotState.RUNNING:
             try:
-                # Time-based close: if strategy has close_time_utc, close all positions
                 await self._check_time_close()
 
                 for symbol in self._symbols:
                     await self._process_symbol(symbol)
+
+                # Successful cycle — reset retry counter and update heartbeat
+                retry_count = 0
+                await self._update_heartbeat()
                 await asyncio.sleep(self._loop_interval)
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self._log("error", f"Bot loop error: {e}")
-                self._state = BotState.ERROR
-                break
+                tb = traceback.format_exc()
+                self._log(
+                    "error",
+                    f"Bot loop crash (attempt #{retry_count + 1}): {e}\n{tb}",
+                )
+                await self._update_crash_state(error=e, tb=tb)
+
+                delay = _RETRY_DELAYS[min(retry_count, len(_RETRY_DELAYS) - 1)]
+                retry_count += 1
+                self._log("warning", f"Retrying loop in {delay}s...")
+                try:
+                    await asyncio.sleep(delay)
+                except asyncio.CancelledError:
+                    break
+
+    async def _update_heartbeat(self) -> None:
+        """Update last_heartbeat and clear error_state in bot_config after a successful cycle."""
+        try:
+            async with _get_session_factory()() as session:
+                await session.execute(
+                    sa_update(BotConfig)
+                    .where(BotConfig.is_active.is_(True))
+                    .values(
+                        last_heartbeat=datetime.now(timezone.utc),
+                        error_state=False,
+                    )
+                )
+                await session.commit()
+        except Exception as db_exc:
+            self._log("warning", f"Heartbeat DB update failed: {db_exc}")
+
+    async def _update_crash_state(self, error: Exception, tb: str) -> None:
+        """Persist crash details to bot_config: error_state, last_error, crash_count."""
+        try:
+            error_text = f"{type(error).__name__}: {error}\n\n--- Traceback ---\n{tb}"
+            async with _get_session_factory()() as session:
+                await session.execute(
+                    sa_update(BotConfig)
+                    .where(BotConfig.is_active.is_(True))
+                    .values(
+                        error_state=True,
+                        last_error=error_text,
+                        crash_count=BotConfig.crash_count + 1,
+                        last_heartbeat=datetime.now(timezone.utc),
+                    )
+                )
+                await session.commit()
+        except Exception as db_exc:
+            self._log("warning", f"Crash state DB update failed: {db_exc}")
 
     async def _check_time_close(self) -> None:
         """Close all positions if strategy has a time-based close and time is reached."""

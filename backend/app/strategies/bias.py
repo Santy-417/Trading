@@ -224,7 +224,7 @@ class BiasStrategy(BaseStrategy):
             )
             return None
         logger.info("bias: manipulation=%s at %.5f", manipulation["type"], manipulation["level"])
-        print(f"[DEBUG] MANIPULATION DETECTED: {manipulation['type']} at {manipulation['level']:.5f}")
+        logger.debug("MANIPULATION DETECTED: %s at %.5f", manipulation['type'], manipulation['level'])
 
         # 5. Check if we're in NY session for entry
         # OPTIMIZATION: If manipulation was stored from earlier today (London session),
@@ -238,19 +238,19 @@ class BiasStrategy(BaseStrategy):
             # Manipulation from today exists - allow entry until 18:00 Bogota (extended window)
             if current_time.hour >= 18:
                 logger.info("bias: manipulation expired (after 18:00 Bogota)")
-                print(f"[DEBUG] BLOCKED: Manipulation expired (time: {current_time.hour}:00)")
+                logger.debug("BLOCKED: Manipulation expired (time: %d:00)", current_time.hour)
                 return None
             logger.info("bias: using stored manipulation from %s (extended window active)",
                        manipulation["timestamp"].strftime("%H:%M"))
-            print(f"[DEBUG] PASSED: Using stored manipulation (extended window until 18:00)")
+            logger.debug("PASSED: Using stored manipulation (extended window until 18:00)")
         else:
             # Fresh manipulation check - must be in NY session for immediate entry
             if not self._is_ny_session(current_time):
                 logger.info("bias: not in NY session (current time: %s)", current_time)
-                print(f"[DEBUG] BLOCKED: Not in NY session (current time: {current_time})")
+                logger.debug("BLOCKED: Not in NY session (current time: %s)", current_time)
                 return None
             logger.info("bias: in NY session")
-            print(f"[DEBUG] PASSED: NY session check (time: {current_time})")
+            logger.debug("PASSED: NY session check (time: %s)", current_time)
 
         # 6. Shannon entropy filter (dual approach: Z-Score or absolute threshold)
         entropy = self._calculate_entropy(df, self.entropy_window)
@@ -281,10 +281,10 @@ class BiasStrategy(BaseStrategy):
                     entropy,
                     self.entropy_threshold,
                 )
-                print(f"[DEBUG] BLOCKED: Entropy {entropy:.3f} > threshold {self.entropy_threshold}")
+                logger.debug("BLOCKED: Entropy %.3f > threshold %.1f", entropy, self.entropy_threshold)
                 return None
             logger.info("bias_entropy: %.3f passed threshold (%.1f)", entropy, self.entropy_threshold)
-            print(f"[DEBUG] PASSED: Entropy check ({entropy:.3f} <= {self.entropy_threshold})")
+            logger.debug("PASSED: Entropy check (%.3f <= %.1f)", entropy, self.entropy_threshold)
 
         # 7. Multi-timeframe ChoCh detection with fractal break fallback
         direction = SignalDirection.BUY if bias == "BULLISH" else SignalDirection.SELL
@@ -306,11 +306,11 @@ class BiasStrategy(BaseStrategy):
 
             if not fractal_break:
                 logger.info("bias: no ChoCh and no fractal break for %s", direction.value)
-                print(f"[DEBUG] BLOCKED: No ChoCh AND no fractal break for {direction.value}")
+                logger.debug("BLOCKED: No ChoCh AND no fractal break for %s", direction.value)
                 return None
 
             logger.info("bias: No ChoCh but FRACTAL BREAK detected for %s (fallback)", direction.value)
-            print(f"[DEBUG] PASSED: Fractal break detected for {direction.value} (ChoCh failed)")
+            logger.debug("PASSED: Fractal break detected for %s (ChoCh failed)", direction.value)
         else:
             logger.info("bias: ChoCh detected for %s", direction.value)
 
@@ -607,12 +607,12 @@ class BiasStrategy(BaseStrategy):
 
                 # Debug print: Show proximity to PDL
                 if abs(distance_to_pdl) < 5.0:  # Within 5 pips
-                    print(
-                        f"[DEBUG] BULLISH: Bar low={bar_low:.5f}, PDL={pdl:.5f}, "
-                        f"distance={distance_to_pdl:.1f} pips, threshold={self.sweep_tolerance_pips} pips"
+                    logger.debug(
+                        "BULLISH: Bar low=%.5f, PDL=%.5f, distance=%.1f pips, threshold=%.1f pips",
+                        bar_low, pdl, distance_to_pdl, self.sweep_tolerance_pips,
                     )
                     if distance_to_pdl > 0 and distance_to_pdl < self.sweep_tolerance_pips:
-                        print(f"  >> NEAR MISS: Only {distance_to_pdl:.1f} pips away from PDL sweep!")
+                        logger.debug("NEAR MISS PDL: Only %.1f pips away from PDL sweep", distance_to_pdl)
 
                 if bar_low < sweep_threshold:
                     # Step 2: Validate close returns above PDL in same OR next 2 candles
@@ -634,9 +634,9 @@ class BiasStrategy(BaseStrategy):
                             self._last_manipulation = manipulation
                             self._last_manipulation_day = current_time.normalize()
 
-                            print(
-                                f"[DEBUG] BULLISH SWEEP CONFIRMED: low={bar_low:.5f}, PDL={pdl:.5f}, "
-                                f"distance={distance_to_pdl:.1f} pips (tolerance={self.sweep_tolerance_pips} pips)"
+                            logger.debug(
+                                "BULLISH SWEEP CONFIRMED: low=%.5f, PDL=%.5f, distance=%.1f pips (tolerance=%.1f pips)",
+                                bar_low, pdl, distance_to_pdl, self.sweep_tolerance_pips,
                             )
 
                             logger.info(
@@ -658,12 +658,12 @@ class BiasStrategy(BaseStrategy):
 
                 # Debug print: Show proximity to PDH
                 if abs(distance_to_pdh) < 5.0:  # Within 5 pips
-                    print(
-                        f"[DEBUG] BEARISH: Bar high={bar_high:.5f}, PDH={pdh:.5f}, "
-                        f"distance={distance_to_pdh:.1f} pips, threshold={self.sweep_tolerance_pips} pips"
+                    logger.debug(
+                        "BEARISH: Bar high=%.5f, PDH=%.5f, distance=%.1f pips, threshold=%.1f pips",
+                        bar_high, pdh, distance_to_pdh, self.sweep_tolerance_pips,
                     )
                     if distance_to_pdh > 0 and distance_to_pdh < self.sweep_tolerance_pips:
-                        print(f"  >> NEAR MISS: Only {distance_to_pdh:.1f} pips away from PDH sweep!")
+                        logger.debug("NEAR MISS PDH: Only %.1f pips away from PDH sweep", distance_to_pdh)
 
                 if bar_high > sweep_threshold:
                     # Step 2: Validate close returns below PDH in same OR next 2 candles
@@ -685,9 +685,9 @@ class BiasStrategy(BaseStrategy):
                             self._last_manipulation = manipulation
                             self._last_manipulation_day = current_time.normalize()
 
-                            print(
-                                f"[DEBUG] BEARISH SWEEP CONFIRMED: high={bar_high:.5f}, PDH={pdh:.5f}, "
-                                f"distance={distance_to_pdh:.1f} pips (tolerance={self.sweep_tolerance_pips} pips)"
+                            logger.debug(
+                                "BEARISH SWEEP CONFIRMED: high=%.5f, PDH=%.5f, distance=%.1f pips (tolerance=%.1f pips)",
+                                bar_high, pdh, distance_to_pdh, self.sweep_tolerance_pips,
                             )
 
                             logger.info(
