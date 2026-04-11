@@ -6,6 +6,7 @@ import Grid from "@mui/material/Grid";
 import TradingViewWidget from "@/components/charts/TradingViewWidget";
 import TradePanel from "@/components/trading/TradePanel";
 import AccountOverview from "@/components/trading/AccountOverview";
+import LastSignalBadge from "@/components/trading/LastSignalBadge";
 import PositionsTable from "@/components/trading/PositionsTable";
 import StatCard from "@/components/common/StatCard";
 import {
@@ -173,6 +174,9 @@ export default function TradingPage() {
       </Box>
 
       <AccountOverview />
+
+      {/* Bot signal status */}
+      <LastSignalBadge />
 
       {/* Stat cards */}
       <Grid container spacing={2} sx={{ mb: 2 }}>

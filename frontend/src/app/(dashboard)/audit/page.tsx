@@ -6,6 +6,7 @@ import {
   Card,
   CardContent,
   Chip,
+  Divider,
   Table,
   TableBody,
   TableCell,
@@ -38,6 +39,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import api from "@/lib/api";
 import type { Trade } from "@/types";
+import DecisionViewer from "@/components/trading/DecisionViewer";
 
 type SortField = "date" | "profit" | "lot_size";
 type SortDir = "asc" | "desc";
@@ -596,6 +598,10 @@ export default function AuditPage() {
                     </Box>
                   ))}
                 </Box>
+
+                {/* Signal decision viewer */}
+                <Divider sx={{ my: 2.5, borderColor: "rgba(148,163,184,0.08)" }} />
+                <DecisionViewer metadata={selectedTrade.signal_metadata ?? null} />
               </motion.div>
             </DialogContent>
           </Dialog>

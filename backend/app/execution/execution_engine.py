@@ -50,6 +50,7 @@ class ExecutionEngine:
         self._task: asyncio.Task | None = None
         self._loop_interval: int = 60  # seconds between checks
         self._log_buffer: deque[dict] = deque(maxlen=_MAX_LOG_ENTRIES)
+        self._last_executed_trade: dict | None = None
 
     def _log(self, level: str, message: str, symbol: str | None = None) -> None:
         """Log a message and store it in the buffer."""
@@ -360,6 +361,16 @@ class ExecutionEngine:
 
         if trade_result.success:
             self._risk.record_trade()
+            self._last_executed_trade = {
+                "symbol": symbol,
+                "direction": direction.value,
+                "volume": lot_size,
+                "ticket": trade_result.ticket,
+                "entry_price": trade_result.price,
+                "stop_loss": signal.stop_loss,
+                "take_profit": signal.take_profit,
+                "executed_at": datetime.now(timezone.utc).isoformat(),
+            }
             self._log(
                 "info",
                 f"[{symbol}] Trade executed: {direction.value} {lot_size} lots, "

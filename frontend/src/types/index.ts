@@ -79,6 +79,24 @@ export interface PendingOrder {
 }
 
 // ─── Trades ───────────────────────────────────────────
+export interface SignalMetadata {
+  entry_type: "choch" | "fractal_break";
+  bias_d1: "bullish" | "bearish" | "neutral";
+  session: "london" | "ny" | "overlap";
+  features: {
+    swept_pdh: boolean;
+    swept_pdl: boolean;
+    daily_bias_bullish: boolean;
+    daily_bias_bearish: boolean;
+    is_ny_session: boolean;
+    entropy_zscore: number;
+    fractal_break_high: boolean;
+    fractal_break_low: boolean;
+  };
+  ml_confidence: number | null;
+  sweep_magnitude_pips: number | null;
+}
+
 export interface Trade {
   id: string;
   symbol: string;
@@ -97,6 +115,7 @@ export interface Trade {
   status: string;
   opened_at: string;
   closed_at: string | null;
+  signal_metadata?: SignalMetadata | null;
 }
 
 // ─── Backtest ─────────────────────────────────────────

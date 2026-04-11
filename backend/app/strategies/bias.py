@@ -118,6 +118,12 @@ class BiasStrategy(BaseStrategy):
         self._m5_resample_cache: dict[int, pd.DataFrame] = {}
         # Cache M5 resampled DataFrames by H1 DataFrame length for backtesting performance
 
+        # Signal status tracking — exposed via GET /bot/signal-status
+        self._last_block_reason: str | None = None
+        self._last_block_detail: str | None = None
+        self._sweep_detected: bool = False
+        self._daily_bias: str | None = None
+
     # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
@@ -162,13 +168,18 @@ class BiasStrategy(BaseStrategy):
         bias = self._get_daily_bias(df)
         if bias is None:
             logger.info("bias: no daily bias detected")
+            self._last_block_reason = "sin_bias_d1"
+            self._last_block_detail = "No se pudo determinar el sesgo diario D1"
             return None
         logger.info("bias: daily_bias=%s", bias)
+        self._daily_bias = bias
 
         # 2. Previous day levels
         pdh, pdl = self._get_previous_day_levels(df)
         if pdh is None or pdl is None:
             logger.info("bias: PDH/PDL not found")
+            self._last_block_reason = "sin_bias_d1"
+            self._last_block_detail = "PDH/PDL del día anterior no encontrados"
             return None
         logger.info("bias: PDH=%.5f, PDL=%.5f", pdh, pdl)
 
@@ -208,6 +219,9 @@ class BiasStrategy(BaseStrategy):
                 logger.info("bias_neutral: PDH sweep detected, switching to BEARISH")
             else:
                 logger.info("bias_neutral: no sweeps detected in either direction")
+                self._last_block_reason = "bias_neutral"
+                self._last_block_detail = "Bias NEUTRAL (Doji): sin sweeps en ninguna dirección"
+                self._sweep_detected = False
                 return None
         else:
             # Normal directional bias
@@ -222,9 +236,13 @@ class BiasStrategy(BaseStrategy):
                 pdh,
                 pdl,
             )
+            self._last_block_reason = "sin_sweep"
+            self._last_block_detail = f"Sin manipulación London detectada (Bias={bias})"
+            self._sweep_detected = False
             return None
         logger.info("bias: manipulation=%s at %.5f", manipulation["type"], manipulation["level"])
         logger.debug("MANIPULATION DETECTED: %s at %.5f", manipulation['type'], manipulation['level'])
+        self._sweep_detected = True
 
         # 5. Check if we're in NY session for entry
         # OPTIMIZATION: If manipulation was stored from earlier today (London session),
@@ -239,6 +257,8 @@ class BiasStrategy(BaseStrategy):
             if current_time.hour >= 18:
                 logger.info("bias: manipulation expired (after 18:00 Bogota)")
                 logger.debug("BLOCKED: Manipulation expired (time: %d:00)", current_time.hour)
+                self._last_block_reason = "fuera_sesion_ny"
+                self._last_block_detail = "Manipulación expirada (después de 18:00 Bogotá)"
                 return None
             logger.info("bias: using stored manipulation from %s (extended window active)",
                        manipulation["timestamp"].strftime("%H:%M"))
@@ -248,6 +268,8 @@ class BiasStrategy(BaseStrategy):
             if not self._is_ny_session(current_time):
                 logger.info("bias: not in NY session (current time: %s)", current_time)
                 logger.debug("BLOCKED: Not in NY session (current time: %s)", current_time)
+                self._last_block_reason = "fuera_sesion_ny"
+                self._last_block_detail = f"Fuera de sesión NY (hora actual: {current_time.strftime('%H:%M')})"
                 return None
             logger.info("bias: in NY session")
             logger.debug("PASSED: NY session check (time: %s)", current_time)
@@ -269,6 +291,8 @@ class BiasStrategy(BaseStrategy):
                     entropy_zscore,
                     entropy,
                 )
+                self._last_block_reason = "entropia_alta"
+                self._last_block_detail = f"Entropía alta: z-score={entropy_zscore:.2f} > 1.5 (mercado caótico)"
                 return None
             logger.info(
                 "bias_entropy: z_score=%.3f passed (entropy=%.3f)", entropy_zscore, entropy
@@ -282,6 +306,8 @@ class BiasStrategy(BaseStrategy):
                     self.entropy_threshold,
                 )
                 logger.debug("BLOCKED: Entropy %.3f > threshold %.1f", entropy, self.entropy_threshold)
+                self._last_block_reason = "entropia_alta"
+                self._last_block_detail = f"Entropía={entropy:.3f} > umbral={self.entropy_threshold:.1f}"
                 return None
             logger.info("bias_entropy: %.3f passed threshold (%.1f)", entropy, self.entropy_threshold)
             logger.debug("PASSED: Entropy check (%.3f <= %.1f)", entropy, self.entropy_threshold)
@@ -307,6 +333,8 @@ class BiasStrategy(BaseStrategy):
             if not fractal_break:
                 logger.info("bias: no ChoCh and no fractal break for %s", direction.value)
                 logger.debug("BLOCKED: No ChoCh AND no fractal break for %s", direction.value)
+                self._last_block_reason = "sin_choch"
+                self._last_block_detail = f"Sin ChoCh ni Fractal Break para {direction.value}"
                 return None
 
             logger.info("bias: No ChoCh but FRACTAL BREAK detected for %s (fallback)", direction.value)
@@ -336,6 +364,8 @@ class BiasStrategy(BaseStrategy):
                     "bias_ml_filter: confidence=%.4f < threshold=%.2f, skipping",
                     ml_confidence, self.min_ml_confidence,
                 )
+                self._last_block_reason = "confianza_ml_baja"
+                self._last_block_detail = f"ML confidence={ml_confidence:.2%} < umbral={self.min_ml_confidence:.2%}"
                 return None
 
         # 9. Hybrid risk calculation
@@ -377,9 +407,13 @@ class BiasStrategy(BaseStrategy):
         # Override base validation to use our min_rr
         if signal.direction == SignalDirection.NEUTRAL:
             logger.info("bias: signal direction is NEUTRAL")
+            self._last_block_reason = "sin_choch"
+            self._last_block_detail = "Dirección de señal NEUTRAL"
             return None
         if signal.stop_loss <= 0 or signal.take_profit <= 0:
             logger.info("bias: invalid SL/TP (%.5f/%.5f)", signal.stop_loss, signal.take_profit)
+            self._last_block_reason = "sin_choch"
+            self._last_block_detail = f"SL/TP inválidos ({signal.stop_loss:.5f}/{signal.take_profit:.5f})"
             return None
 
         # RR validation with automatic retry using liquidity target
@@ -417,6 +451,8 @@ class BiasStrategy(BaseStrategy):
                     new_rr,
                     self.min_rr,
                 )
+                self._last_block_reason = "rr_insuficiente"
+                self._last_block_detail = f"RR={new_rr:.2f} < mínimo={self.min_rr:.1f} (incluso con TP alternativo)"
                 return None
 
         logger.info(
@@ -431,6 +467,11 @@ class BiasStrategy(BaseStrategy):
             symbol, direction.value, current_price, sl, tp,
             signal.risk_reward_ratio, bias, entropy, risk_percent,
         )
+
+        # Clear block state — signal was generated successfully
+        self._last_block_reason = None
+        self._last_block_detail = None
+
         return signal
 
     def calculate_sl_tp(
